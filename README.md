@@ -10,8 +10,8 @@ Keep your expectations low.
 
 ## Technology
 
-Project is fully written in Go programming language but uses [Raylib](https://github.com/gen2brain/raylib-go) bindings.
-Raylib is used for graphical user interface for the NN.
+Project is fully written in Go programming language but uses [Raylib-go](https://github.com/gen2brain/raylib-go) bindings.
+[Raylib](https://github.com/raysan5/raylib) is used for graphical user interface to manage neural networks clusters.
 
 ## Testing
 
