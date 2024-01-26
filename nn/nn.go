@@ -203,21 +203,17 @@ func (m Matrix) Convolve(filter Matrix) error {
 	return nil
 }
 
-// Row returns copy of a matrix row.
-func (m Matrix) Row(row int) ([]float64, error) {
+// Row returns copy of a matrix row at row index as a matrix with single row.
+func (m Matrix) Row(row int) (Matrix, error) {
+	var nm Matrix
 	if row < 0 || row >= m.rows {
-		return nil, fmt.Errorf("exceeded row number, expected row in range [ 0, %v ], received %v", m.rows, row)
+		return nm, fmt.Errorf("exceeded row number, expected row in range [ 0, %v ], received %v", m.rows, row)
 	}
-	s := make([]float64, 0, m.cols)
-	for i := 0; i < m.cols; i++ {
-		v, err := m.At(row, i)
-		if err != nil {
-			// unreachable
-			return nil, fmt.Errorf("unreachable, %w", err)
-		}
-		s = append(s, v)
-	}
-	return s, nil
+	nm.cols = m.cols
+	nm.rows = 1
+	nm.values = make([]float64, m.cols)
+	copy(nm.values, m.values[row:row+m.cols])
+	return nm, nil
 }
 
 // Print prints matrix into stdout.
@@ -296,20 +292,12 @@ func Copy(dst, src Matrix) error {
 		return fmt.Errorf(
 			"unmatching number of columns, dst [ %v ], src [ %v]", dst.cols, src.cols)
 	}
-	for i := 0; i < src.rows; i++ {
-		for j := 0; j < src.cols; j++ {
-			v, err := src.At(i, j)
-			if err != nil {
-				// unreachable
-				return fmt.Errorf("unreachable, %w", err)
-			}
-			err = dst.SetAt(i, j, v)
-			if err != nil {
-				// unreachable
-				return fmt.Errorf("unreachable, %w", err)
-			}
-		}
+	if len(dst.values) != len(src.values) {
+		return fmt.Errorf(
+			"unmatching underlining slice len, dst [ %v ], src [ %v]", len(dst.values), len(src.values))
+
 	}
+	copy(dst.values, src.values)
 	return nil
 }
 
@@ -349,9 +337,9 @@ func Sum(dst, src Matrix) error {
 
 // Layer is a NN layer.
 type layer struct {
-	ws  Matrix
-	bs  Matrix
-	as  Matrix
+	ws  Matrix // weights
+	bs  Matrix // biases
+	as  Matrix // activations
 	act ActivationFunction
 }
 
@@ -412,6 +400,59 @@ func (nn NN) Forward() error {
 		nn.arch[i+1].as.Activate(nn.arch[i].act)
 	}
 	return nil
+}
+
+// Cost function calculates the cost.
+func (nn NN) Cost(in, out Matrix) (float64, error) {
+	if in.cols != nn.arch[0].as.cols {
+		return 0.0, fmt.Errorf(
+			"expected input number of columns [ %v ], received  [ %v ]",
+			nn.arch[0].as.cols,
+			in.cols,
+		)
+	}
+	if out.cols != nn.arch[len(nn.arch)-1].as.cols {
+		return 0.0, fmt.Errorf(
+			"expected output number of columns [ %v ], received  [ %v ]",
+			nn.arch[len(nn.arch)-1].as.cols,
+			in.cols,
+		)
+	}
+	if in.rows != out.rows {
+		return 0.0, fmt.Errorf(
+			"expected input and output to match with number of rows, input [ %v ] rows, out [ %v ] rows",
+			in.rows,
+			out.rows,
+		)
+	}
+	var cost float64
+
+	for i := 0; i < in.rows; i++ {
+		inRow, err := in.Row(i)
+		if err != nil {
+			return 0.0, fmt.Errorf("unreachable, %w", err)
+		}
+		if err := Copy(nn.arch[0].as, inRow); err != nil {
+			return 0.0, fmt.Errorf("unreachable, %w", err)
+		}
+		if err := nn.Forward(); err != nil {
+			return 0.0, err
+		}
+		for j := 0; j < out.cols; j++ {
+			outV, err := nn.arch[len(nn.arch)-1].as.At(0, j)
+			if err != nil {
+				return 0.0, err
+			}
+			testV, err := out.At(i, j)
+			if err != nil {
+				return 0.0, err
+			}
+			d := outV - testV
+			cost += d * d
+		}
+	}
+
+	return cost / float64(in.rows), nil
 }
 
 // PrintActivationLayer prints activation layer from NN architecture at given index.
