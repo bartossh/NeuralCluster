@@ -72,7 +72,7 @@ var testCasesFailure = []testCase{
 
 func TestMatrixDotProductSuccess(t *testing.T) {
 	for _, tc := range testCases {
-		t.Run(fmt.Sprintf("testing dot for dst %v a %v b %v ", tc.dst, tc.a, tc.b), func(t *testing.T) {
+		t.Run(fmt.Sprintf("success dot for dst %v a %v b %v ", tc.dst, tc.a, tc.b), func(t *testing.T) {
 			dst := NewMatrix(tc.dst.rows, tc.dst.cols)
 			a := NewMatrix(tc.a.rows, tc.a.cols)
 			a.Randomize()
@@ -86,7 +86,7 @@ func TestMatrixDotProductSuccess(t *testing.T) {
 
 func TestMatrixDotProductFailure(t *testing.T) {
 	for _, tc := range testCasesFailure {
-		t.Run(fmt.Sprintf("testing dot for dst %v a %v b %v ", tc.dst, tc.a, tc.b), func(t *testing.T) {
+		t.Run(fmt.Sprintf("failure dot for dst %v a %v b %v ", tc.dst, tc.a, tc.b), func(t *testing.T) {
 			dst := NewMatrix(tc.dst.rows, tc.dst.cols)
 			a := NewMatrix(tc.a.rows, tc.a.cols)
 			a.Randomize()
@@ -100,7 +100,7 @@ func TestMatrixDotProductFailure(t *testing.T) {
 
 func BenchmarkMatrixDotProduct(b *testing.B) {
 	for _, tc := range testCases {
-		b.Run(fmt.Sprintf("bench dot for dst %v a %v b %v ", tc.dst, tc.a, tc.b), func(b *testing.B) {
+		b.Run(fmt.Sprintf("dot dst %v a %v b %v ", tc.dst, tc.a, tc.b), func(b *testing.B) {
 			dst := NewMatrix(tc.dst.rows, tc.dst.cols)
 			a := NewMatrix(tc.a.rows, tc.a.cols)
 			a.Randomize()
@@ -135,7 +135,7 @@ func TestConvolve(t *testing.T) {
 	filter.SetAt(2, 1, 0.0)
 	filter.SetAt(2, 2, -1.0)
 	for _, tc := range testCases {
-		t.Run(fmt.Sprintf("testing dot for dst %v a %v b %v ", tc.dst, tc.a, tc.b), func(t *testing.T) {
+		t.Run(fmt.Sprintf("convolve dst %v a %v b %v ", tc.dst, tc.a, tc.b), func(t *testing.T) {
 			dst := NewMatrix(tc.dst.rows, tc.dst.cols)
 			a := NewMatrix(tc.a.rows, tc.a.cols)
 			a.Randomize()
@@ -199,4 +199,42 @@ func TestNNForward(t *testing.T) {
 		nn.PrintWeightsLayer(i)
 		nn.PrintBiasLayer(i)
 	}
+}
+
+func BenchmarkNNForward(b *testing.B) {
+	benchCase := [][]Schema{
+		{
+			{Size: 10, Activation: ReluActivation},
+			{Size: 20, Activation: ReluActivation},
+			{Size: 5, Activation: ReluActivation},
+			{Size: 1, Activation: ReluActivation},
+		},
+		{
+			{Size: 20, Activation: ReluActivation},
+			{Size: 50, Activation: ReluActivation},
+			{Size: 10, Activation: ReluActivation},
+			{Size: 8, Activation: ReluActivation},
+			{Size: 5, Activation: ReluActivation},
+		},
+		{
+			{Size: 200, Activation: ReluActivation},
+			{Size: 500, Activation: ReluActivation},
+			{Size: 100, Activation: ReluActivation},
+			{Size: 50, Activation: ReluActivation},
+			{Size: 10, Activation: ReluActivation},
+		},
+	}
+
+	for _, arch := range benchCase {
+		b.Run(fmt.Sprintf("size factor %v", arch[0].Size), func(b *testing.B) {
+			nn, err := NewNN(arch)
+			assert.NilError(b, err)
+			nn.Randomize()
+			for n := 0; n < b.N; n++ {
+				err = nn.Forward()
+				assert.NilError(b, err)
+			}
+		})
+	}
+
 }
