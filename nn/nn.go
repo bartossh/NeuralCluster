@@ -1,12 +1,26 @@
 package nn
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"math/rand"
 )
 
+type ActivationType string
+
+const (
+	SigmoidActivation   ActivationType = "sigmoid"
+	TanhActivation      ActivationType = "tanh"
+	ReluActivation      ActivationType = "relu"
+	LeakyReluActivation ActivationType = "leaky_relu"
+	EluActivation       ActivationType = "elu"
+)
+
 const alpha float64 = 0.01
+
+// Neutral activation function does nothing to the input value.
+func Neutral(a float64) float64 { return a }
 
 // Sigmoid calculate sigmoid function for given input.
 func Sigmoid(a float64) float64 { return 1.0 / (1.0 + math.Exp(-a)) }
@@ -56,6 +70,23 @@ func Softmax(x []float64) []float64 {
 	return result
 }
 
+func selectActivationFunction(t ActivationType) ActivationFunction {
+	switch t {
+	case SigmoidActivation:
+		return Sigmoid
+	case TanhActivation:
+		return Tanh
+	case ReluActivation:
+		return Relu
+	case LeakyReluActivation:
+		return LeakyRelu
+	case EluActivation:
+		return Elu
+	default:
+		return Neutral
+	}
+}
+
 // ActivationFunction is an activation signature function.
 // Activations functions avaliable in this package are: Sigmoid, Tanh, Relu, LeakyRelu, Elu.
 type ActivationFunction func(a float64) float64
@@ -67,8 +98,8 @@ type Matrix struct {
 	cols   int
 }
 
-// MatrixNew creates new Matrix with given number of rows and columns.
-func MatrixNew(rows, cols int) Matrix {
+// NewMatrix creates new Matrix with given number of rows and columns.
+func NewMatrix(rows, cols int) Matrix {
 	return Matrix{
 		values: make([]float64, rows*cols),
 		rows:   rows,
@@ -118,7 +149,7 @@ func (m Matrix) Activate(actf ActivationFunction) {
 	}
 }
 
-// Convolve function applise filter convolution into matrix.
+// Convolve function applies filter convolution into matrix.
 // Filter matrix should have the same number of rows and columns and be of smaller size than
 // the convolution receiver matrix.
 func (m Matrix) Convolve(filter Matrix) error {
@@ -316,5 +347,93 @@ func Sum(dst, src Matrix) error {
 	return nil
 }
 
+// Layer is a NN layer.
+type layer struct {
+	ws  Matrix
+	bs  Matrix
+	as  Matrix
+	act ActivationFunction
+}
+
+// Schema describes the layer schema and can be decoded from json or yaml file.
+type Schema struct {
+	Size       int            `json:"size" yaml:"size"`
+	Activation ActivationType `json:"activates_type" yaml:"activates_type"`
+}
+
 // NN is a Neural Network.
-type NN struct{}
+type NN struct {
+	arch []layer
+}
+
+// NewNN creates new NN based on the architecture.
+func NewNN(architecture []Schema) (NN, error) {
+	if len(architecture) < 3 {
+		return NN{}, errors.New("expecting at list 3 layers, input layer, hidden layer(s), output layer")
+	}
+	arch := make([]layer, len(architecture))
+	arch[0] = layer{as: NewMatrix(1, architecture[0].Size), act: selectActivationFunction(architecture[0].Activation)}
+	for i := range architecture {
+		var actf ActivationFunction = Neutral
+		switch i {
+		case 0:
+			continue
+		case len(architecture) - 1:
+			actf = selectActivationFunction(architecture[i].Activation)
+		default:
+		}
+		arch[i].act = actf
+		arch[i-1].ws = NewMatrix(architecture[i-1].Size, architecture[i].Size)
+		arch[i-1].bs = NewMatrix(1, architecture[i].Size)
+		arch[i].as = NewMatrix(1, architecture[i].Size)
+	}
+
+	return NN{arch: arch}, nil
+}
+
+// Randomize randomizes the all layers matrices values.
+func (nn NN) Randomize() {
+	for _, l := range nn.arch {
+		l.as.Randomize()
+		l.ws.Randomize()
+		l.bs.Randomize()
+	}
+}
+
+// Forward applies feed forward action on neural network.
+func (nn NN) Forward() error {
+	for i := 0; i < len(nn.arch)-2; i++ {
+		if err := Dot(nn.arch[i+1].as, nn.arch[i].as, nn.arch[i].ws); err != nil {
+			return fmt.Errorf("unreachable, %w", err)
+		}
+		if err := Sum(nn.arch[i+1].as, nn.arch[i].bs); err != nil {
+			return fmt.Errorf("unreachable, %w", err)
+		}
+		nn.arch[i+1].as.Activate(nn.arch[i].act)
+	}
+	return nil
+}
+
+// PrintActivationLayer prints activation layer from NN architecture at given index.
+func (nn NN) PrintActivationLayer(idx int) {
+	if idx < 0 || idx > len(nn.arch) {
+		fmt.Printf("index out of architecture size, expected 0 to %v, received %v\n", len(nn.arch), idx)
+	}
+	nn.arch[idx].as.Print(fmt.Sprintf("activation layer %v", idx))
+}
+
+// PrintWeightsLayer prints weights layer from NN architecture at given index.
+func (nn NN) PrintWeightsLayer(idx int) {
+	if idx < 0 || idx > len(nn.arch)-1 {
+		fmt.Printf("index out of architecture size, expected 0 to %v, received %v\n", len(nn.arch), idx)
+	}
+	nn.arch[idx].ws.Print(fmt.Sprintf("weights layer %v", idx))
+}
+
+// PrintBiasLayer prints bias layer from NN architecture at given index.
+func (nn NN) PrintBiasLayer(idx int) {
+	if idx < 0 || idx > len(nn.arch)-1 {
+		fmt.Printf("index out of architecture size, expected 0 to %v, received %v\n", len(nn.arch), idx)
+	}
+	nn.arch[idx].bs.Print(fmt.Sprintf("bias layer %v", idx))
+}

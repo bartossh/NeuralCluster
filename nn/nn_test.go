@@ -73,10 +73,10 @@ var testCasesFailure = []testCase{
 func TestMatrixDotProductSuccess(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("testing dot for dst %v a %v b %v ", tc.dst, tc.a, tc.b), func(t *testing.T) {
-			dst := MatrixNew(tc.dst.rows, tc.dst.cols)
-			a := MatrixNew(tc.a.rows, tc.a.cols)
+			dst := NewMatrix(tc.dst.rows, tc.dst.cols)
+			a := NewMatrix(tc.a.rows, tc.a.cols)
 			a.Randomize()
-			b := MatrixNew(tc.b.rows, tc.b.cols)
+			b := NewMatrix(tc.b.rows, tc.b.cols)
 			b.Randomize()
 			err := Dot(dst, a, b)
 			assert.NilError(t, err)
@@ -87,10 +87,10 @@ func TestMatrixDotProductSuccess(t *testing.T) {
 func TestMatrixDotProductFailure(t *testing.T) {
 	for _, tc := range testCasesFailure {
 		t.Run(fmt.Sprintf("testing dot for dst %v a %v b %v ", tc.dst, tc.a, tc.b), func(t *testing.T) {
-			dst := MatrixNew(tc.dst.rows, tc.dst.cols)
-			a := MatrixNew(tc.a.rows, tc.a.cols)
+			dst := NewMatrix(tc.dst.rows, tc.dst.cols)
+			a := NewMatrix(tc.a.rows, tc.a.cols)
 			a.Randomize()
-			b := MatrixNew(tc.b.rows, tc.b.cols)
+			b := NewMatrix(tc.b.rows, tc.b.cols)
 			b.Randomize()
 			err := Dot(dst, a, b)
 			assert.ErrorContains(t, err, "wrong")
@@ -101,10 +101,10 @@ func TestMatrixDotProductFailure(t *testing.T) {
 func BenchmarkMatrixDotProduct(b *testing.B) {
 	for _, tc := range testCases {
 		b.Run(fmt.Sprintf("bench dot for dst %v a %v b %v ", tc.dst, tc.a, tc.b), func(b *testing.B) {
-			dst := MatrixNew(tc.dst.rows, tc.dst.cols)
-			a := MatrixNew(tc.a.rows, tc.a.cols)
+			dst := NewMatrix(tc.dst.rows, tc.dst.cols)
+			a := NewMatrix(tc.a.rows, tc.a.cols)
 			a.Randomize()
-			c := MatrixNew(tc.b.rows, tc.b.cols)
+			c := NewMatrix(tc.b.rows, tc.b.cols)
 			c.Randomize()
 			b.ResetTimer()
 			for n := 0; n < b.N; n++ {
@@ -115,7 +115,7 @@ func BenchmarkMatrixDotProduct(b *testing.B) {
 }
 
 func TestPrint(t *testing.T) {
-	m := MatrixNew(5, 5)
+	m := NewMatrix(5, 5)
 	m.Print("m zero")
 	m.Randomize()
 	m.Print("m randomize")
@@ -124,7 +124,7 @@ func TestPrint(t *testing.T) {
 }
 
 func TestConvolve(t *testing.T) {
-	filter := MatrixNew(3, 3)
+	filter := NewMatrix(3, 3)
 	filter.SetAt(0, 0, 1.0)
 	filter.SetAt(0, 1, 0.0)
 	filter.SetAt(0, 2, -1.0)
@@ -136,10 +136,10 @@ func TestConvolve(t *testing.T) {
 	filter.SetAt(2, 2, -1.0)
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("testing dot for dst %v a %v b %v ", tc.dst, tc.a, tc.b), func(t *testing.T) {
-			dst := MatrixNew(tc.dst.rows, tc.dst.cols)
-			a := MatrixNew(tc.a.rows, tc.a.cols)
+			dst := NewMatrix(tc.dst.rows, tc.dst.cols)
+			a := NewMatrix(tc.a.rows, tc.a.cols)
 			a.Randomize()
-			b := MatrixNew(tc.b.rows, tc.b.cols)
+			b := NewMatrix(tc.b.rows, tc.b.cols)
 			b.Randomize()
 			err := Dot(dst, a, b)
 			assert.NilError(t, err)
@@ -150,7 +150,7 @@ func TestConvolve(t *testing.T) {
 }
 
 func BenchmarkConvolve(b *testing.B) {
-	filter := MatrixNew(3, 3)
+	filter := NewMatrix(3, 3)
 	filter.SetAt(0, 0, 1.0)
 	filter.SetAt(0, 1, 0.0)
 	filter.SetAt(0, 2, -1.0)
@@ -163,10 +163,10 @@ func BenchmarkConvolve(b *testing.B) {
 	for _, tc := range testCases {
 		b.Run(fmt.Sprintf("testing dot for dst %v a %v b %v ", tc.dst, tc.a, tc.b), func(b *testing.B) {
 			for n := 0; n < b.N; n++ {
-				dst := MatrixNew(tc.dst.rows, tc.dst.cols)
-				a := MatrixNew(tc.a.rows, tc.a.cols)
+				dst := NewMatrix(tc.dst.rows, tc.dst.cols)
+				a := NewMatrix(tc.a.rows, tc.a.cols)
 				a.Randomize()
-				c := MatrixNew(tc.b.rows, tc.b.cols)
+				c := NewMatrix(tc.b.rows, tc.b.cols)
 				c.Randomize()
 				err := Dot(dst, a, c)
 				assert.NilError(b, err)
@@ -174,5 +174,29 @@ func BenchmarkConvolve(b *testing.B) {
 				assert.NilError(b, err)
 			}
 		})
+	}
+}
+
+func TestNNForward(t *testing.T) {
+	architecture := []Schema{
+		{Size: 10, Activation: ReluActivation},
+		{Size: 20, Activation: ReluActivation},
+		{Size: 10, Activation: ReluActivation},
+		{Size: 5, Activation: ReluActivation},
+		{Size: 3, Activation: ReluActivation},
+	}
+
+	nn, err := NewNN(architecture)
+	assert.NilError(t, err)
+	nn.Randomize()
+	err = nn.Forward()
+	assert.NilError(t, err)
+	for i := range architecture {
+		nn.PrintActivationLayer(i)
+		if i == len(architecture)-1 {
+			break
+		}
+		nn.PrintWeightsLayer(i)
+		nn.PrintBiasLayer(i)
 	}
 }
