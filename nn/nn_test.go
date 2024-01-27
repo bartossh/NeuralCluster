@@ -2,6 +2,7 @@ package nn
 
 import (
 	"fmt"
+	"math"
 	"testing"
 
 	"gotest.tools/assert"
@@ -639,7 +640,7 @@ func TestBackpropAndLearning(t *testing.T) {
 				{Size: 5, Activation: ReluActivation},
 				{Size: 1, Activation: ReluActivation},
 			},
-			dataRows: 50,
+			dataRows: 10,
 		},
 		//{
 		//	name: "small",
@@ -664,8 +665,8 @@ func TestBackpropAndLearning(t *testing.T) {
 		//},
 	}
 
-	const epochs = 2
-	const learningRate float64 = 0.001
+	const epochs = 200000
+	const learningRate float64 = 0.0001
 
 	for i, tc := range testCases {
 		t.Run(fmt.Sprintf("cost %v test", i), func(t *testing.T) {
@@ -677,7 +678,7 @@ func TestBackpropAndLearning(t *testing.T) {
 			in.Randomize()
 			out.Randomize()
 			fmt.Println("===============================")
-			// maxCost := math.MaxFloat64
+			maxCost := math.MaxFloat64
 			for epoch := 0; epoch < epochs; epoch++ {
 				for j := 0; j < tc.dataRows; j++ {
 					v, err := in.Row(j)
@@ -700,22 +701,21 @@ func TestBackpropAndLearning(t *testing.T) {
 					//nn.PrintWeightsLayer(2)
 					//fmt.Println("=== next ===")
 					//nn.PrintActivationLayer(3)
-					//nn.PrintBiasLayer(3)
-					//nn.PrintWeightsLayer(3)
 					//fmt.Println("=== next ===")
-					nn.Output().Print("output")
+					//nn.Output().Print("output")
 				}
 				err = nn.Backprop(in, out)
 				assert.NilError(t, err)
-				//err = nn.Learn(learningRate)
-				//assert.NilError(t, err)
+				err = nn.Learn(learningRate)
+				assert.NilError(t, err)
 				cost, err := nn.Cost(in, out)
 				assert.NilError(t, err)
-				fmt.Printf("cost: %.4f \n", cost)
-				fmt.Println("---- next ----")
+				//fmt.Printf("cost: %.4f \n", cost)
 				//assert.Equal(t, true, cost < maxCost)
-				//maxCost = cost
+				maxCost = cost
 			}
+
+			fmt.Printf("max cost: %.4f \n", maxCost)
 		})
 	}
 }

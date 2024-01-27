@@ -577,12 +577,11 @@ func (nn *NN) Backprop(in, out Matrix) error {
 
 	for i := 0; i < in.rows; i++ {
 		inRow, err := in.Row(i)
-
 		if err != nil {
 			return fmt.Errorf("unreachable, %w", err)
 		}
 
-		if err := Copy(nn.arch[0].as, inRow); err != nil {
+		if err := nn.Input(inRow); err != nil {
 			return fmt.Errorf("unreachable, %w", err)
 		}
 
@@ -641,12 +640,12 @@ func (nn *NN) Backprop(in, out Matrix) error {
 						return err
 					}
 
-					wsVal, err := nn.bpNN.arch[idx-1].bs.At(0, j)
+					wsVal, err := nn.bpNN.arch[idx-1].ws.At(k, j)
 					if err != nil {
 						return err
 					}
 
-					err = nn.bpNN.arch[idx-1].bs.SetAt(0, j, wsVal+dVal*qVal*pVal)
+					err = nn.bpNN.arch[idx-1].ws.SetAt(k, j, wsVal+dVal*qVal*pVal)
 					if err != nil {
 						return err
 					}
@@ -708,7 +707,7 @@ func (nn NN) Learn(r float64) error {
 	if nn.bpNN == nil {
 		return errors.New("back propagation is cleared, cannot perform learning")
 	}
-	for i := range nn.arch {
+	for i := 0; i < len(nn.arch)-1; i++ {
 		for j := 0; j < nn.arch[i].ws.rows; j++ {
 			for k := 0; k < nn.arch[i].ws.cols; k++ {
 				wVal, err := nn.arch[i].ws.At(j, k)
