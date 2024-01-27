@@ -23,15 +23,35 @@ const alpha float64 = 0.01
 func Neutral(a float64) float64 { return a }
 
 // Sigmoid calculate sigmoid function for given input.
-func Sigmoid(a float64) float64 { return 1.0 / (1.0 + math.Exp(-a)) }
+func Sigmoid(a float64) float64 { return 1.0 / (1.0 + math.Exp(-a)) } // Derivative of the sigmoid activation function
+
+// SigmoidDerivative calculates sigmoid deactivation value.
+func SigmoidDerivative(x float64) float64 {
+	sig := Sigmoid(x)
+	return sig * (1 - sig)
+}
 
 // Than calculates hyperbolic tangent function for given input.
 func Tanh(a float64) float64 { return (math.Exp(a) - math.Exp(-a)) / (math.Exp(a) + math.Exp(-a)) }
+
+// TanhDerivative calculates tangent deactivation value.
+func TanhDerivative(x float64) float64 {
+	tanh := Tanh(x)
+	return 1 - tanh*tanh
+}
 
 // Relu calculates rectified linear unit function for given input.
 func Relu(a float64) float64 {
 	if a > 0 {
 		return a
+	}
+	return 0
+}
+
+// ReLUDerivative calculates rectified linear unit  deactivation value.
+func ReLUDerivative(x float64) float64 {
+	if x > 0 {
+		return 1
 	}
 	return 0
 }
@@ -45,12 +65,28 @@ func LeakyRelu(a float64) float64 {
 	return a * alpha
 }
 
+// LeakyReLUDerivative calculates leaky rectified linear unit deactivation value.
+func LeakyReLUDerivative(x float64) float64 {
+	if x > 0 {
+		return 1
+	}
+	return alpha
+}
+
 // Elu calculates exponential linear unit function for given input.
 func Elu(a float64) float64 {
 	if a > 0 {
 		return a
 	}
 	return alpha * (math.Exp(a) - 1)
+}
+
+// EluDerivative calculates exponential linear unit deactivation value.
+func EluDerivative(x float64) float64 {
+	if x > 0 {
+		return 1
+	}
+	return Elu(x) + alpha
 }
 
 // Sotmax calculates softmax function on slice of float64 values.
@@ -82,6 +118,23 @@ func selectActivationFunction(t ActivationType) ActivationFunction {
 		return LeakyRelu
 	case EluActivation:
 		return Elu
+	default:
+		return Neutral
+	}
+}
+
+func selectDeactivationActivationFunction(t ActivationType) ActivationFunction {
+	switch t {
+	case SigmoidActivation:
+		return SigmoidDerivative
+	case TanhActivation:
+		return TanhDerivative
+	case ReluActivation:
+		return ReLUDerivative
+	case LeakyReluActivation:
+		return LeakyReLUDerivative
+	case EluActivation:
+		return EluDerivative
 	default:
 		return Neutral
 	}
@@ -139,7 +192,16 @@ func (m Matrix) Randomize() {
 	}
 }
 
-// Activate activates all vlaues in the matrix.
+// Zero zeros the matrix values.
+func (m Matrix) Zero() {
+	for i := 0; i < m.rows; i++ {
+		for j := 0; j < m.cols; j++ {
+			m.SetAt(i, j, 0.0)
+		}
+	}
+}
+
+// Activate activates all values in the matrix.
 func (m Matrix) Activate(actf ActivationFunction) {
 	for i := 0; i < m.rows; i++ {
 		for j := 0; j < m.cols; j++ {
@@ -161,13 +223,13 @@ func (m Matrix) Convolve(filter Matrix) error {
 	}
 	if filter.rows >= m.rows {
 		return fmt.Errorf(
-			"expected reciver matrix of bigger size than the filter, received rows in matrix [ %v ], in filter [ %v ]",
+			"expected matrix of bigger size than the filter, received rows in matrix [ %v ], in filter [ %v ]",
 			m.rows, filter.rows,
 		)
 	}
 	if filter.cols >= m.cols {
 		return fmt.Errorf(
-			"expected reciver matrix of bigger size than the filter, received columns in matrix [ %v ], in filter [ %v ]",
+			"expected matrix of bigger size than the filter, received columns in matrix [ %v ], in filter [ %v ]",
 			m.cols, filter.cols,
 		)
 	}
@@ -337,10 +399,11 @@ func Sum(dst, src Matrix) error {
 
 // Layer is a NN layer.
 type layer struct {
-	ws  Matrix // weights
-	bs  Matrix // biases
-	as  Matrix // activations
-	act ActivationFunction
+	ws    Matrix // weights
+	bs    Matrix // biases
+	as    Matrix // activations
+	act   ActivationFunction
+	deact ActivationFunction
 }
 
 // Schema describes the layer schema and can be decoded from json or yaml file.
@@ -352,31 +415,81 @@ type Schema struct {
 // NN is a Neural Network.
 type NN struct {
 	arch []layer
+	bpNN *NN
 }
 
 // NewNN creates new NN based on the architecture.
 func NewNN(architecture []Schema) (NN, error) {
+	var nn NN
 	if len(architecture) < 3 {
-		return NN{}, errors.New("expecting at list 3 layers, input layer, hidden layer(s), output layer")
+		return nn, errors.New("expecting at list 3 layers, input layer, hidden layer(s), output layer")
 	}
-	arch := make([]layer, len(architecture))
-	arch[0] = layer{as: NewMatrix(1, architecture[0].Size), act: selectActivationFunction(architecture[0].Activation)}
+
+	nn.arch = make([]layer, len(architecture))
+	nn.arch[0] = layer{as: NewMatrix(1, architecture[0].Size), act: selectActivationFunction(architecture[0].Activation)}
 	for i := range architecture {
 		var actf ActivationFunction = Neutral
+		var dactf ActivationFunction = Neutral
 		switch i {
 		case 0:
 			continue
 		case len(architecture) - 1:
 			actf = selectActivationFunction(architecture[i].Activation)
+			dactf = selectDeactivationActivationFunction(architecture[i].Activation)
 		default:
 		}
-		arch[i].act = actf
-		arch[i-1].ws = NewMatrix(architecture[i-1].Size, architecture[i].Size)
-		arch[i-1].bs = NewMatrix(1, architecture[i].Size)
-		arch[i].as = NewMatrix(1, architecture[i].Size)
+		nn.arch[i].act = actf
+		nn.arch[i].deact = dactf
+		nn.arch[i-1].ws = NewMatrix(architecture[i-1].Size, architecture[i].Size)
+		nn.arch[i-1].bs = NewMatrix(1, architecture[i].Size)
+		nn.arch[i].as = NewMatrix(1, architecture[i].Size)
 	}
 
-	return NN{arch: arch}, nil
+	return nn, nil
+}
+
+func (nn NN) zero() {
+	for _, l := range nn.arch {
+		l.as.Zero()
+		l.ws.Zero()
+		l.bs.Zero()
+	}
+}
+
+func (nn *NN) createNewBackpropNN() {
+	bpnn := new(NN)
+	bpnn.arch = make([]layer, len(nn.arch))
+	for i := range nn.arch {
+		bpnn.arch[i].as = NewMatrix(nn.arch[i].as.rows, nn.arch[i].as.cols)
+		bpnn.arch[i].ws = NewMatrix(nn.arch[i].ws.rows, nn.arch[i].ws.cols)
+		bpnn.arch[i].bs = NewMatrix(nn.arch[i].bs.rows, nn.arch[i].bs.cols)
+	}
+	nn.bpNN = bpnn
+}
+
+func (nn NN) validateInOutSize(in, out Matrix) error {
+	if in.cols != nn.arch[0].as.cols {
+		return fmt.Errorf(
+			"expected input number of columns [ %v ], received  [ %v ]",
+			nn.arch[0].as.cols,
+			in.cols,
+		)
+	}
+	if out.cols != nn.arch[len(nn.arch)-1].as.cols {
+		return fmt.Errorf(
+			"expected output number of columns [ %v ], received  [ %v ]",
+			nn.arch[len(nn.arch)-1].as.cols,
+			in.cols,
+		)
+	}
+	if in.rows != out.rows {
+		return fmt.Errorf(
+			"expected input and output to match with number of rows, input [ %v ] rows, out [ %v ] rows",
+			in.rows,
+			out.rows,
+		)
+	}
+	return nil
 }
 
 // Randomize randomizes the all layers matrices values.
@@ -404,28 +517,10 @@ func (nn NN) Forward() error {
 
 // Cost function calculates the cost.
 func (nn NN) Cost(in, out Matrix) (float64, error) {
-	if in.cols != nn.arch[0].as.cols {
-		return 0.0, fmt.Errorf(
-			"expected input number of columns [ %v ], received  [ %v ]",
-			nn.arch[0].as.cols,
-			in.cols,
-		)
-	}
-	if out.cols != nn.arch[len(nn.arch)-1].as.cols {
-		return 0.0, fmt.Errorf(
-			"expected output number of columns [ %v ], received  [ %v ]",
-			nn.arch[len(nn.arch)-1].as.cols,
-			in.cols,
-		)
-	}
-	if in.rows != out.rows {
-		return 0.0, fmt.Errorf(
-			"expected input and output to match with number of rows, input [ %v ] rows, out [ %v ] rows",
-			in.rows,
-			out.rows,
-		)
-	}
 	var cost float64
+	if err := nn.validateInOutSize(in, out); err != nil {
+		return cost, err
+	}
 
 	for i := 0; i < in.rows; i++ {
 		inRow, err := in.Row(i)
@@ -453,6 +548,139 @@ func (nn NN) Cost(in, out Matrix) (float64, error) {
 	}
 
 	return cost / float64(in.rows), nil
+}
+
+// Backprop performs back propagation on NN.
+func (nn *NN) Backprop(in, out Matrix) error {
+	switch nn.bpNN {
+	case nil:
+		nn.createNewBackpropNN()
+	default:
+		nn.bpNN.zero()
+	}
+
+	if err := nn.validateInOutSize(in, out); err != nil {
+		return err
+	}
+
+	for i := 0; i < in.rows; i++ {
+		inRow, err := in.Row(i)
+
+		if err != nil {
+			return fmt.Errorf("unreachable, %w", err)
+		}
+
+		if err := Copy(nn.arch[0].as, inRow); err != nil {
+			return fmt.Errorf("unreachable, %w", err)
+		}
+
+		if err := nn.Forward(); err != nil {
+			return err
+		}
+
+		for _, l := range nn.bpNN.arch {
+			l.as.Zero()
+		}
+
+		for j := 0; j < out.cols; j++ {
+			outV, err := nn.arch[len(nn.arch)-1].as.At(0, j)
+			if err != nil {
+				return err
+			}
+			testV, err := out.At(i, j)
+			if err != nil {
+				return err
+			}
+			nn.bpNN.arch[len(nn.bpNN.arch)-1].as.SetAt(0, j, 2.0*(outV-testV))
+		}
+
+		for idx := len(nn.arch) - 1; idx > 0; idx-- {
+			for j := 0; j < nn.arch[idx].as.cols; j++ {
+				val, err := nn.arch[idx].as.At(0, j)
+				if err != nil {
+					return err
+				}
+
+				dVal, err := nn.bpNN.arch[idx].as.At(0, j)
+				if err != nil {
+					return err
+				}
+
+				qVal := nn.arch[idx].deact(val)
+
+				bsVal, err := nn.bpNN.arch[idx-1].bs.At(0, j)
+				if err != nil {
+					return err
+				}
+
+				err = nn.bpNN.arch[idx-1].bs.SetAt(0, j, bsVal+dVal*qVal)
+				if err != nil {
+					return err
+				}
+
+				for k := 0; k < nn.arch[idx-1].as.cols; k++ {
+					pVal, err := nn.arch[idx-1].as.At(0, k)
+					if err != nil {
+						return err
+					}
+
+					wVal, err := nn.arch[idx-1].ws.At(k, j)
+					if err != nil {
+						return err
+					}
+
+					wsVal, err := nn.bpNN.arch[idx-1].bs.At(0, j)
+					if err != nil {
+						return err
+					}
+
+					err = nn.bpNN.arch[idx-1].bs.SetAt(0, j, wsVal+dVal*qVal*pVal)
+					if err != nil {
+						return err
+					}
+
+					asVal, err := nn.bpNN.arch[idx-1].as.At(0, k)
+					if err != nil {
+						return err
+					}
+
+					err = nn.bpNN.arch[idx-1].as.SetAt(0, k, asVal+dVal*qVal*wVal)
+					if err != nil {
+						return err
+					}
+				}
+			}
+		}
+	}
+
+	for i := range nn.bpNN.arch {
+		for j := 0; j < nn.bpNN.arch[i].ws.rows; j++ {
+			for k := 0; k < nn.bpNN.arch[i].ws.cols; k++ {
+				val, err := nn.bpNN.arch[i].ws.At(j, k)
+				if err != nil {
+					return err
+				}
+
+				err = nn.bpNN.arch[i].ws.SetAt(j, k, val/float64(out.rows))
+				if err != nil {
+					return err
+				}
+			}
+		}
+		for k := 0; k < nn.bpNN.arch[i].bs.cols; k++ {
+			val, err := nn.bpNN.arch[i].bs.At(0, k)
+			if err != nil {
+				return err
+			}
+
+			err = nn.bpNN.arch[i].bs.SetAt(0, k, val/float64(out.rows))
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 // PrintActivationLayer prints activation layer from NN architecture at given index.

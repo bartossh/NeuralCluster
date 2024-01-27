@@ -348,11 +348,13 @@ func TestCost(t *testing.T) {
 
 func BenchmarkCost(b *testing.B) {
 	type testDef struct {
+		name     string
 		arch     []Schema
 		dataRows int
 	}
 	testCases := []testDef{
 		{
+			name: "tiny",
 			arch: []Schema{
 				{Size: 10, Activation: ReluActivation},
 				{Size: 20, Activation: ReluActivation},
@@ -362,6 +364,7 @@ func BenchmarkCost(b *testing.B) {
 			dataRows: 50,
 		},
 		{
+			name: "small",
 			arch: []Schema{
 				{Size: 8, Activation: ReluActivation},
 				{Size: 10, Activation: EluActivation},
@@ -371,6 +374,7 @@ func BenchmarkCost(b *testing.B) {
 			dataRows: 100,
 		},
 		{
+			name: "decent",
 			arch: []Schema{
 				{Size: 80, Activation: ReluActivation},
 				{Size: 300, Activation: SigmoidActivation},
@@ -381,6 +385,7 @@ func BenchmarkCost(b *testing.B) {
 			dataRows: 100,
 		},
 		{
+			name: "large",
 			arch: []Schema{
 				{Size: 100, Activation: ReluActivation},
 				{Size: 1000, Activation: SigmoidActivation},
@@ -393,7 +398,7 @@ func BenchmarkCost(b *testing.B) {
 	}
 
 	for i, tc := range testCases {
-		b.Run(fmt.Sprintf("cost %v test", i), func(b *testing.B) {
+		b.Run(fmt.Sprintf("cost %v %s benchmark", i, tc.name), func(b *testing.B) {
 			nn, err := NewNN(tc.arch)
 			assert.NilError(b, err)
 			nn.Randomize()
@@ -404,6 +409,141 @@ func BenchmarkCost(b *testing.B) {
 			b.ResetTimer()
 			for n := 0; n < b.N; n++ {
 				_, err := nn.Cost(in, out)
+				assert.NilError(b, err)
+			}
+		})
+	}
+}
+
+func TestBackpropErrors(t *testing.T) {
+	type testDef struct {
+		name     string
+		arch     []Schema
+		dataRows int
+	}
+	testCases := []testDef{
+		{
+			name: "tiny",
+			arch: []Schema{
+				{Size: 10, Activation: ReluActivation},
+				{Size: 20, Activation: ReluActivation},
+				{Size: 5, Activation: ReluActivation},
+				{Size: 1, Activation: ReluActivation},
+			},
+			dataRows: 50,
+		},
+		{
+			name: "small",
+			arch: []Schema{
+				{Size: 8, Activation: ReluActivation},
+				{Size: 10, Activation: EluActivation},
+				{Size: 2, Activation: SigmoidActivation},
+				{Size: 12, Activation: ReluActivation},
+			},
+			dataRows: 100,
+		},
+		{
+			name: "decent",
+			arch: []Schema{
+				{Size: 80, Activation: ReluActivation},
+				{Size: 300, Activation: SigmoidActivation},
+				{Size: 200, Activation: EluActivation},
+				{Size: 100, Activation: LeakyReluActivation},
+				{Size: 12, Activation: SigmoidActivation},
+			},
+			dataRows: 100,
+		},
+		{
+			name: "large",
+			arch: []Schema{
+				{Size: 100, Activation: ReluActivation},
+				{Size: 1000, Activation: SigmoidActivation},
+				{Size: 500, Activation: EluActivation},
+				{Size: 100, Activation: LeakyReluActivation},
+				{Size: 50, Activation: SigmoidActivation},
+			},
+			dataRows: 200,
+		},
+	}
+
+	for i, tc := range testCases {
+		t.Run(fmt.Sprintf("cost %v test", i), func(t *testing.T) {
+			nn, err := NewNN(tc.arch)
+			assert.NilError(t, err)
+			nn.Randomize()
+			in := NewMatrix(tc.dataRows, tc.arch[0].Size)
+			out := NewMatrix(tc.dataRows, tc.arch[len(tc.arch)-1].Size)
+			in.Randomize()
+			out.Randomize()
+			err = nn.Backprop(in, out)
+			assert.NilError(t, err)
+		})
+	}
+}
+
+func BenchmarkBackprop(b *testing.B) {
+	type testDef struct {
+		name     string
+		arch     []Schema
+		dataRows int
+	}
+	testCases := []testDef{
+		{
+			name: "tiny",
+			arch: []Schema{
+				{Size: 10, Activation: ReluActivation},
+				{Size: 20, Activation: ReluActivation},
+				{Size: 5, Activation: ReluActivation},
+				{Size: 1, Activation: ReluActivation},
+			},
+			dataRows: 50,
+		},
+		{
+			name: "small",
+			arch: []Schema{
+				{Size: 8, Activation: ReluActivation},
+				{Size: 10, Activation: EluActivation},
+				{Size: 2, Activation: SigmoidActivation},
+				{Size: 12, Activation: ReluActivation},
+			},
+			dataRows: 100,
+		},
+		{
+			name: "decent",
+			arch: []Schema{
+				{Size: 80, Activation: ReluActivation},
+				{Size: 300, Activation: SigmoidActivation},
+				{Size: 200, Activation: EluActivation},
+				{Size: 100, Activation: LeakyReluActivation},
+				{Size: 12, Activation: SigmoidActivation},
+			},
+			dataRows: 100,
+		},
+		{
+			name: "large",
+			arch: []Schema{
+				{Size: 100, Activation: ReluActivation},
+				{Size: 1000, Activation: SigmoidActivation},
+				{Size: 500, Activation: EluActivation},
+				{Size: 100, Activation: LeakyReluActivation},
+				{Size: 50, Activation: SigmoidActivation},
+			},
+			dataRows: 200,
+		},
+	}
+
+	for i, tc := range testCases {
+		b.Run(fmt.Sprintf("cost %v %s benchmark", i, tc.name), func(b *testing.B) {
+			nn, err := NewNN(tc.arch)
+			assert.NilError(b, err)
+			nn.Randomize()
+			in := NewMatrix(tc.dataRows, tc.arch[0].Size)
+			out := NewMatrix(tc.dataRows, tc.arch[len(tc.arch)-1].Size)
+			in.Randomize()
+			out.Randomize()
+			b.ResetTimer()
+			for n := 0; n < b.N; n++ {
+				err = nn.Backprop(in, out)
 				assert.NilError(b, err)
 			}
 		})
