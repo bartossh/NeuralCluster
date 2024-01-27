@@ -116,14 +116,59 @@ func TestMatrixDotProductSuccess(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("success dot for dst %v a %v b %v ", tc.dst, tc.a, tc.b), func(t *testing.T) {
 			dst := NewMatrix(tc.dst.rows, tc.dst.cols)
+			dst.Randomize()
+			dstCopy := NewMatrix(tc.dst.rows, tc.dst.cols)
+			err := Copy(dstCopy, dst)
+			assert.NilError(t, err)
 			a := NewMatrix(tc.a.rows, tc.a.cols)
 			a.Randomize()
 			b := NewMatrix(tc.b.rows, tc.b.cols)
 			b.Randomize()
-			err := Dot(dst, a, b)
+			err = Dot(dst, a, b)
 			assert.NilError(t, err)
+			for i := range dst.values {
+				assert.Equal(t, false, dst.values[i] == dstCopy.values[i])
+			}
 		})
 	}
+}
+
+func TestMatrixDotProductCorrectness(t *testing.T) {
+	dst := NewMatrix(3, 2)
+	a := Matrix{
+		rows: 3,
+		cols: 3,
+		values: []float64{
+			1, 2, 3,
+			4, 5, 6,
+			7, 8, 9,
+		},
+	}
+	b := Matrix{
+		rows: 3,
+		cols: 2,
+		values: []float64{
+			1, 2,
+			3, 4,
+			5, 6,
+		},
+	}
+	result := Matrix{
+		rows: 3,
+		cols: 2,
+		values: []float64{
+			22, 28,
+			49, 64,
+			76, 100,
+		},
+	}
+
+	err := Dot(dst, a, b)
+	assert.NilError(t, err)
+	for i := range dst.values {
+		assert.Equal(t, true, dst.values[i] == result.values[i])
+	}
+
 }
 
 func TestMatrixDotProductFailure(t *testing.T) {
@@ -232,19 +277,27 @@ func TestNNForward(t *testing.T) {
 	nn, err := NewNN(architecture)
 	assert.NilError(t, err)
 	nn.Randomize()
-	err = nn.Forward()
-	assert.NilError(t, err)
-	for i := range architecture {
-		nn.PrintActivationLayer(i)
-		if i == len(architecture)-1 {
-			break
+	in := NewMatrix(1, architecture[0].Size)
+	in.Randomize()
+	output := nn.Output()
+	for i := 0; i < 100; i++ {
+		in.Randomize()
+		err = nn.Input(in)
+		assert.NilError(t, err)
+		err = nn.Forward()
+		assert.NilError(t, err)
+		out := nn.Output()
+		assert.Equal(t, len(out.values), len(output.values))
+		for j := range out.values {
+			assert.Equal(t, false, output.values[j] == out.values[j])
 		}
-		nn.PrintWeightsLayer(i)
-		nn.PrintBiasLayer(i)
+
+		output = out
 	}
+
 }
 
-func BenchmarkNNForward(b *testing.B) {
+func BenchmarkNNForwardWithInput(b *testing.B) {
 	benchCase := [][]Schema{
 		{
 			{Size: 10, Activation: ReluActivation},
@@ -274,7 +327,11 @@ func BenchmarkNNForward(b *testing.B) {
 			assert.NilError(b, err)
 			nn.Randomize()
 			b.ResetTimer()
+			in := NewMatrix(0, arch[0].Size)
+			in.Randomize()
 			for n := 0; n < b.N; n++ {
+				err = nn.Input(in)
+				assert.NilError(b, err)
 				err = nn.Forward()
 				assert.NilError(b, err)
 			}
@@ -338,9 +395,10 @@ func TestCost(t *testing.T) {
 			out := NewMatrix(tc.dataRows, tc.arch[len(tc.arch)-1].Size)
 			in.Randomize()
 			out.Randomize()
+			nn.Input(in)
+			nn.Forward()
 			cost, err := nn.Cost(in, out)
 			assert.NilError(t, err)
-			fmt.Printf("calculated cost [ %.3f ] \n", cost)
 			assert.Equal(t, true, cost != 0)
 		})
 	}
@@ -406,6 +464,9 @@ func BenchmarkCost(b *testing.B) {
 			out := NewMatrix(tc.dataRows, tc.arch[len(tc.arch)-1].Size)
 			in.Randomize()
 			out.Randomize()
+			nn.Input(in)
+			nn.Forward()
+
 			b.ResetTimer()
 			for n := 0; n < b.N; n++ {
 				_, err := nn.Cost(in, out)
@@ -475,6 +536,12 @@ func TestBackpropErrors(t *testing.T) {
 			out := NewMatrix(tc.dataRows, tc.arch[len(tc.arch)-1].Size)
 			in.Randomize()
 			out.Randomize()
+			v, err := in.Row(0)
+			assert.NilError(t, err)
+			err = nn.Input(v)
+			assert.NilError(t, err)
+			err = nn.Forward()
+			assert.NilError(t, err)
 			err = nn.Backprop(in, out)
 			assert.NilError(t, err)
 		})
@@ -541,10 +608,113 @@ func BenchmarkBackprop(b *testing.B) {
 			out := NewMatrix(tc.dataRows, tc.arch[len(tc.arch)-1].Size)
 			in.Randomize()
 			out.Randomize()
+			v, err := in.Row(0)
+			assert.NilError(b, err)
+			err = nn.Input(v)
+			assert.NilError(b, err)
+			err = nn.Forward()
+			assert.NilError(b, err)
+
 			b.ResetTimer()
 			for n := 0; n < b.N; n++ {
 				err = nn.Backprop(in, out)
 				assert.NilError(b, err)
+			}
+		})
+	}
+}
+
+func TestBackpropAndLearning(t *testing.T) {
+	type testDef struct {
+		name     string
+		arch     []Schema
+		dataRows int
+	}
+	testCases := []testDef{
+		{
+			name: "tiny",
+			arch: []Schema{
+				{Size: 10, Activation: ReluActivation},
+				{Size: 20, Activation: ReluActivation},
+				{Size: 5, Activation: ReluActivation},
+				{Size: 1, Activation: ReluActivation},
+			},
+			dataRows: 50,
+		},
+		//{
+		//	name: "small",
+		//	arch: []Schema{
+		//		{Size: 12, Activation: ReluActivation},
+		//		{Size: 25, Activation: EluActivation},
+		//		{Size: 10, Activation: SigmoidActivation},
+		//		{Size: 5, Activation: ReluActivation},
+		//	},
+		//	dataRows: 100,
+		//},
+		//{
+		//	name: "decent",
+		//	arch: []Schema{
+		//		{Size: 80, Activation: ReluActivation},
+		//		{Size: 300, Activation: SigmoidActivation},
+		//		{Size: 200, Activation: EluActivation},
+		//		{Size: 100, Activation: LeakyReluActivation},
+		//		{Size: 12, Activation: SigmoidActivation},
+		//	},
+		//	dataRows: 100,
+		//},
+	}
+
+	const epochs = 2
+	const learningRate float64 = 0.001
+
+	for i, tc := range testCases {
+		t.Run(fmt.Sprintf("cost %v test", i), func(t *testing.T) {
+			nn, err := NewNN(tc.arch)
+			assert.NilError(t, err)
+			nn.Randomize()
+			in := NewMatrix(tc.dataRows, tc.arch[0].Size)
+			out := NewMatrix(tc.dataRows, tc.arch[len(tc.arch)-1].Size)
+			in.Randomize()
+			out.Randomize()
+			fmt.Println("===============================")
+			// maxCost := math.MaxFloat64
+			for epoch := 0; epoch < epochs; epoch++ {
+				for j := 0; j < tc.dataRows; j++ {
+					v, err := in.Row(j)
+					assert.NilError(t, err)
+					err = nn.Input(v)
+					assert.NilError(t, err)
+					err = nn.Forward()
+					assert.NilError(t, err)
+
+					//nn.PrintActivationLayer(0)
+					//nn.PrintBiasLayer(0)
+					//nn.PrintWeightsLayer(0)
+					//fmt.Println("=== next ===")
+					//nn.PrintActivationLayer(1)
+					//nn.PrintBiasLayer(1)
+					//nn.PrintWeightsLayer(1)
+					//fmt.Println("=== next ===")
+					//nn.PrintActivationLayer(2)
+					//nn.PrintBiasLayer(2)
+					//nn.PrintWeightsLayer(2)
+					//fmt.Println("=== next ===")
+					//nn.PrintActivationLayer(3)
+					//nn.PrintBiasLayer(3)
+					//nn.PrintWeightsLayer(3)
+					//fmt.Println("=== next ===")
+					nn.Output().Print("output")
+				}
+				err = nn.Backprop(in, out)
+				assert.NilError(t, err)
+				//err = nn.Learn(learningRate)
+				//assert.NilError(t, err)
+				cost, err := nn.Cost(in, out)
+				assert.NilError(t, err)
+				fmt.Printf("cost: %.4f \n", cost)
+				fmt.Println("---- next ----")
+				//assert.Equal(t, true, cost < maxCost)
+				//maxCost = cost
 			}
 		})
 	}

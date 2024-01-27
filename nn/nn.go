@@ -501,16 +501,28 @@ func (nn NN) Randomize() {
 	}
 }
 
+// Input places input in to the input layer or if input matrix doesn't match returns error.
+func (nn *NN) Input(in Matrix) error {
+	return Copy(nn.arch[0].as, in)
+}
+
+// Output returns output matrix.
+func (nn NN) Output() Matrix {
+	m := NewMatrix(nn.arch[len(nn.arch)-1].as.rows, nn.arch[len(nn.arch)-1].as.cols)
+	Copy(m, nn.arch[len(nn.arch)-1].as)
+	return m
+}
+
 // Forward applies feed forward action on neural network.
 func (nn NN) Forward() error {
-	for i := 0; i < len(nn.arch)-2; i++ {
+	for i := 0; i < len(nn.arch)-1; i++ {
 		if err := Dot(nn.arch[i+1].as, nn.arch[i].as, nn.arch[i].ws); err != nil {
 			return fmt.Errorf("unreachable, %w", err)
 		}
 		if err := Sum(nn.arch[i+1].as, nn.arch[i].bs); err != nil {
 			return fmt.Errorf("unreachable, %w", err)
 		}
-		nn.arch[i+1].as.Activate(nn.arch[i].act)
+		nn.arch[i+1].as.Activate(nn.arch[i+1].act)
 	}
 	return nil
 }
@@ -527,7 +539,7 @@ func (nn NN) Cost(in, out Matrix) (float64, error) {
 		if err != nil {
 			return 0.0, fmt.Errorf("unreachable, %w", err)
 		}
-		if err := Copy(nn.arch[0].as, inRow); err != nil {
+		if err := nn.Input(inRow); err != nil {
 			return 0.0, fmt.Errorf("unreachable, %w", err)
 		}
 		if err := nn.Forward(); err != nil {
@@ -683,10 +695,60 @@ func (nn *NN) Backprop(in, out Matrix) error {
 	return nil
 }
 
+// ClearBackprop clears back propagation removing it from memory.
+// Learning is impossible after back propagation is cleared.
+// Use it only after learning process is finished and there is a need to save memory.
+func (nn *NN) ClearBackprop() {
+	nn.bpNN = nil
+}
+
+// Learn performs learning by applying back propagation with given learning rate.
+// Requires back propagation to be performed first.
+func (nn NN) Learn(r float64) error {
+	if nn.bpNN == nil {
+		return errors.New("back propagation is cleared, cannot perform learning")
+	}
+	for i := range nn.arch {
+		for j := 0; j < nn.arch[i].ws.rows; j++ {
+			for k := 0; k < nn.arch[i].ws.cols; k++ {
+				wVal, err := nn.arch[i].ws.At(j, k)
+				if err != nil {
+					return fmt.Errorf("unreachable, %w", err)
+				}
+				bpwVal, err := nn.bpNN.arch[i].ws.At(j, k)
+				if err != nil {
+					return fmt.Errorf("unreachable, %w", err)
+				}
+				err = nn.arch[i].ws.SetAt(j, k, wVal-r*bpwVal)
+				if err != nil {
+					return fmt.Errorf("unreachable, %w", err)
+				}
+			}
+		}
+
+		for k := 0; k < nn.arch[i].bs.cols; k++ {
+			bVal, err := nn.arch[i].bs.At(0, k)
+			if err != nil {
+				return fmt.Errorf("unreachable, %w", err)
+			}
+			bpbVal, err := nn.bpNN.arch[i].bs.At(0, k)
+			if err != nil {
+				return fmt.Errorf("unreachable, %w", err)
+			}
+			err = nn.arch[i].bs.SetAt(0, k, bVal-r*bpbVal)
+			if err != nil {
+				return fmt.Errorf("unreachable, %w", err)
+			}
+		}
+	}
+
+	return nil
+}
+
 // PrintActivationLayer prints activation layer from NN architecture at given index.
 func (nn NN) PrintActivationLayer(idx int) {
 	if idx < 0 || idx > len(nn.arch) {
-		fmt.Printf("index out of architecture size, expected 0 to %v, received %v\n", len(nn.arch), idx)
+		fmt.Printf("index out of architecture size, expected 0 to %v, received %v\n", len(nn.arch)-1, idx)
 	}
 	nn.arch[idx].as.Print(fmt.Sprintf("activation layer %v", idx))
 }
@@ -694,7 +756,7 @@ func (nn NN) PrintActivationLayer(idx int) {
 // PrintWeightsLayer prints weights layer from NN architecture at given index.
 func (nn NN) PrintWeightsLayer(idx int) {
 	if idx < 0 || idx > len(nn.arch)-1 {
-		fmt.Printf("index out of architecture size, expected 0 to %v, received %v\n", len(nn.arch), idx)
+		fmt.Printf("index out of architecture size, expected 0 to %v, received %v\n", len(nn.arch)-1, idx)
 	}
 	nn.arch[idx].ws.Print(fmt.Sprintf("weights layer %v", idx))
 }
@@ -702,7 +764,7 @@ func (nn NN) PrintWeightsLayer(idx int) {
 // PrintBiasLayer prints bias layer from NN architecture at given index.
 func (nn NN) PrintBiasLayer(idx int) {
 	if idx < 0 || idx > len(nn.arch)-1 {
-		fmt.Printf("index out of architecture size, expected 0 to %v, received %v\n", len(nn.arch), idx)
+		fmt.Printf("index out of architecture size, expected 0 to %v, received %v\n", len(nn.arch)-1, idx)
 	}
 	nn.arch[idx].bs.Print(fmt.Sprintf("bias layer %v", idx))
 }
