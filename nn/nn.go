@@ -1,10 +1,11 @@
 package nn
 
 import (
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"math"
-	"math/rand"
+	"math/big"
 )
 
 type ActivationType string
@@ -19,38 +20,41 @@ const (
 
 const alpha float64 = 0.01
 
+func randFloat64() float64 {
+	nBig, err := rand.Int(rand.Reader, big.NewInt(1<<53))
+	if err != nil {
+		panic(err)
+	}
+	return float64(nBig.Int64()) / (1 << 53)
+}
+
 // Neutral activation function does nothing to the input value.
 func Neutral(a float64) float64 { return a }
 
 // Sigmoid calculate sigmoid function for given input.
 func Sigmoid(a float64) float64 { return 1.0 / (1.0 + math.Exp(-a)) } // Derivative of the sigmoid activation function
 
-// SigmoidDerivative calculates sigmoid deactivation value.
-func SigmoidDerivative(x float64) float64 {
-	sig := Sigmoid(x)
-	return sig * (1 - sig)
+// SigmoidDeactivate calculates sigmoid deactivation value.
+func SigmoidDeactivate(a float64) float64 {
+	return a * (1 - a)
 }
 
 // Than calculates hyperbolic tangent function for given input.
 func Tanh(a float64) float64 { return (math.Exp(a) - math.Exp(-a)) / (math.Exp(a) + math.Exp(-a)) }
 
-// TanhDerivative calculates tangent deactivation value.
-func TanhDerivative(x float64) float64 {
-	tanh := Tanh(x)
-	return 1 - tanh*tanh
+// TanhDeactivate calculates tangent deactivation value.
+func TanhDeactivate(a float64) float64 {
+	return 1 - a*a
 }
 
 // Relu calculates rectified linear unit function for given input.
 func Relu(a float64) float64 {
-	if a > 0 {
-		return a
-	}
-	return 0
+	return math.Max(0, a)
 }
 
-// ReLUDerivative calculates rectified linear unit  deactivation value.
-func ReLUDerivative(x float64) float64 {
-	if x > 0 {
+// ReLUDeactivate calculates rectified linear unit  deactivation value.
+func ReLUDeactivate(a float64) float64 {
+	if a > 0 {
 		return 1
 	}
 	return 0
@@ -65,9 +69,9 @@ func LeakyRelu(a float64) float64 {
 	return a * alpha
 }
 
-// LeakyReLUDerivative calculates leaky rectified linear unit deactivation value.
-func LeakyReLUDerivative(x float64) float64 {
-	if x > 0 {
+// LeakyReLUDeactivate calculates leaky rectified linear unit deactivation value.
+func LeakyReLUDeactivate(a float64) float64 {
+	if a > 0 {
 		return 1
 	}
 	return alpha
@@ -75,15 +79,15 @@ func LeakyReLUDerivative(x float64) float64 {
 
 // Elu calculates exponential linear unit function for given input.
 func Elu(a float64) float64 {
-	if a > 0 {
+	if a >= 0 {
 		return a
 	}
 	return alpha * (math.Exp(a) - 1)
 }
 
-// EluDerivative calculates exponential linear unit deactivation value.
-func EluDerivative(x float64) float64 {
-	if x > 0 {
+// EluDeactivate calculates exponential linear unit deactivation value.
+func EluDeactivate(x float64) float64 {
+	if x >= 0 {
 		return 1
 	}
 	return Elu(x) + alpha
@@ -126,15 +130,15 @@ func selectActivationFunction(t ActivationType) ActivationFunction {
 func selectDeactivationActivationFunction(t ActivationType) ActivationFunction {
 	switch t {
 	case SigmoidActivation:
-		return SigmoidDerivative
+		return SigmoidDeactivate
 	case TanhActivation:
-		return TanhDerivative
+		return TanhDeactivate
 	case ReluActivation:
-		return ReLUDerivative
+		return ReLUDeactivate
 	case LeakyReluActivation:
-		return LeakyReLUDerivative
+		return LeakyReLUDeactivate
 	case EluActivation:
-		return EluDerivative
+		return EluDeactivate
 	default:
 		return Neutral
 	}
@@ -157,6 +161,43 @@ func NewMatrix(rows, cols int) Matrix {
 		values: make([]float64, rows*cols),
 		rows:   rows,
 		cols:   cols,
+	}
+}
+
+// Min finds the minimum number in matrix.
+func (m Matrix) Min() float64 {
+	min := math.MaxFloat64
+	for _, v := range m.values {
+		if v < min {
+			min = v
+		}
+	}
+	return min
+}
+
+// Max finds the mximum number in matrix.
+func (m Matrix) Max() float64 {
+	max := -math.MaxFloat64
+	for _, v := range m.values {
+		if v > max {
+			max = v
+		}
+	}
+	return max
+}
+
+// Normalize normalizes the values in the matrix.
+func (m Matrix) Normalize(min, max float64) {
+	for i := range m.values {
+		m.values[i] = (m.values[i] - min) / (max - min)
+	}
+}
+
+// UnNormalize reverts normalization.
+// Values may differ a little from origin because of loating point rounding happening in normalization and unnormalizaton.
+func (m Matrix) UnNormalize(min, max float64) {
+	for i := range m.values {
+		m.values[i] = (m.values[i] + min) * (max - min)
 	}
 }
 
@@ -184,12 +225,13 @@ func (m Matrix) SetAt(row, col int, v float64) error {
 }
 
 // Randomize rendomizes the matrix values.
-func (m Matrix) Randomize() {
+func (m Matrix) Randomize() error {
 	for i := 0; i < m.rows; i++ {
 		for j := 0; j < m.cols; j++ {
-			m.SetAt(i, j, rand.Float64())
+			m.SetAt(i, j, randFloat64())
 		}
 	}
+	return nil
 }
 
 // Zero zeros the matrix values.
@@ -274,7 +316,7 @@ func (m Matrix) Row(row int) (Matrix, error) {
 	nm.cols = m.cols
 	nm.rows = 1
 	nm.values = make([]float64, m.cols)
-	copy(nm.values, m.values[row:row+m.cols])
+	copy(nm.values, m.values[row*m.cols:row*m.cols+m.cols])
 	return nm, nil
 }
 
@@ -559,7 +601,11 @@ func (nn NN) Cost(in, out Matrix) (float64, error) {
 		}
 	}
 
-	return cost / float64(in.rows), nil
+	cost /= float64(in.rows)
+	if math.IsNaN(cost) {
+		return 0.0, fmt.Errorf("cost is NaN")
+	}
+	return cost, nil
 }
 
 // Backprop performs back propagation on NN.
@@ -576,14 +622,8 @@ func (nn *NN) Backprop(in, out Matrix) error {
 	}
 
 	for i := 0; i < in.rows; i++ {
-		inRow, err := in.Row(i)
-		if err != nil {
-			return fmt.Errorf("unreachable, %w", err)
-		}
-
-		if err := nn.Input(inRow); err != nil {
-			return fmt.Errorf("unreachable, %w", err)
-		}
+		s := i * in.cols
+		copy(nn.arch[0].as.values, in.values[s:s+in.cols])
 
 		if err := nn.Forward(); err != nil {
 			return err
@@ -602,7 +642,7 @@ func (nn *NN) Backprop(in, out Matrix) error {
 			if err != nil {
 				return err
 			}
-			nn.bpNN.arch[len(nn.bpNN.arch)-1].as.SetAt(0, j, 2.0*(outV-testV))
+			nn.bpNN.arch[len(nn.bpNN.arch)-1].as.SetAt(0, j, outV-testV)
 		}
 
 		for idx := len(nn.arch) - 1; idx > 0; idx-- {
@@ -624,7 +664,7 @@ func (nn *NN) Backprop(in, out Matrix) error {
 					return err
 				}
 
-				err = nn.bpNN.arch[idx-1].bs.SetAt(0, j, bsVal+dVal*qVal)
+				err = nn.bpNN.arch[idx-1].bs.SetAt(0, j, bsVal+2.0*dVal*qVal)
 				if err != nil {
 					return err
 				}
@@ -645,7 +685,7 @@ func (nn *NN) Backprop(in, out Matrix) error {
 						return err
 					}
 
-					err = nn.bpNN.arch[idx-1].ws.SetAt(k, j, wsVal+dVal*qVal*pVal)
+					err = nn.bpNN.arch[idx-1].ws.SetAt(k, j, wsVal+2.0*dVal*qVal*pVal)
 					if err != nil {
 						return err
 					}
@@ -654,8 +694,11 @@ func (nn *NN) Backprop(in, out Matrix) error {
 					if err != nil {
 						return err
 					}
-
-					err = nn.bpNN.arch[idx-1].as.SetAt(0, k, asVal+dVal*qVal*wVal)
+					if math.IsNaN(asVal) {
+						// panic("is NaN")
+						return fmt.Errorf("is NaN")
+					}
+					err = nn.bpNN.arch[idx-1].as.SetAt(0, k, asVal+2.0*dVal*qVal*wVal)
 					if err != nil {
 						return err
 					}
@@ -664,7 +707,7 @@ func (nn *NN) Backprop(in, out Matrix) error {
 		}
 	}
 
-	for i := range nn.bpNN.arch {
+	for i := 0; i < len(nn.bpNN.arch)-1; i++ {
 		for j := 0; j < nn.bpNN.arch[i].ws.rows; j++ {
 			for k := 0; k < nn.bpNN.arch[i].ws.cols; k++ {
 				val, err := nn.bpNN.arch[i].ws.At(j, k)
