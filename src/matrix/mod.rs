@@ -6,6 +6,7 @@ use rand::RngCore;
 pub enum MatrixError {
     OutsideRange,
     FilterToLarge,
+    NotMatchingSize,
 }
 
 /// Matrix holds values in a matrix of specified number of rows and columns.
@@ -188,12 +189,48 @@ impl<T: ActivatiorDeactivatior + Copy> Matrix<T> {
 
         Ok(())
     }
+
+    /// copy_to_self copies other matrix to self if matrix has the same size
+    ///
+    pub fn copy_to_self(&mut self, other: &Matrix<T>) -> Result<(), MatrixError> {
+        if self.rows != other.rows || self.cols != other.cols {
+            return Err(MatrixError::OutsideRange);
+        }
+        self.values = other.values.clone();
+
+        Ok(())
+    }
+
+    /// dot applies dot product of two given matrices to the self matrix
+    ///
+    pub fn dot(&mut self, a: &Matrix<T>, b: &Matrix<T>) -> Result<(), MatrixError> {
+        if a.cols != b.rows || self.rows != a.rows || self.cols != b.cols {
+            return Err(MatrixError::NotMatchingSize);
+        }
+
+        for sr in 0..self.rows {
+            for sc in 0..self.cols {
+                let _ = self.set_at(sr, sc, 0.0);
+                for ac in 0..a.cols {
+                    let sv = self.get_at(sr, sc);
+                    let av = a.get_at(sr, ac);
+                    let bv = b.get_at(ac, sc);
+                    if let (Ok(mut svv), Ok(avv), Ok(bvv)) = (sv, av, bv) {
+                        svv += avv * bvv;
+                        let _ = self.set_at(sr, sc, svv);
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::activators::Sigmoid;
+    use crate::activators::{LeakyReLU, ReLU, Sigmoid, Tanh};
     use crate::float_math::round;
 
     #[test]
@@ -230,12 +267,12 @@ mod tests {
         }
         let v = m.get_at(11, 20);
         match v {
-            Ok(v) => panic!("unreachable"),
+            Ok(_) => panic!("unreachable"),
             Err(err) => assert_eq!(err, MatrixError::OutsideRange),
         }
         let v = m.get_at(10, 21);
         match v {
-            Ok(v) => panic!("unreachable"),
+            Ok(_) => panic!("unreachable"),
             Err(err) => assert_eq!(err, MatrixError::OutsideRange),
         }
     }
@@ -410,13 +447,13 @@ mod tests {
             values: vec![1.0, 2.0, 1.0, 1.0, 2.0, 1.0, 1.0, 2.0, 1.0],
             act_deact: Sigmoid::new(),
         };
-        let mut f = Matrix {
+        let f = Matrix {
             rows: 3,
             cols: 3,
             values: vec![1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
             act_deact: Sigmoid::new(),
         };
-        let mut r = Matrix {
+        let r = Matrix {
             rows: 3,
             cols: 3,
             values: vec![
@@ -448,7 +485,7 @@ mod tests {
             ],
             act_deact: Sigmoid::new(),
         };
-        let mut f = Matrix {
+        let f = Matrix {
             rows: 5,
             cols: 5,
             values: vec![
@@ -457,7 +494,7 @@ mod tests {
             ],
             act_deact: Sigmoid::new(),
         };
-        let mut r = Matrix {
+        let r = Matrix {
             rows: 10,
             cols: 10,
             values: vec![
@@ -479,5 +516,115 @@ mod tests {
             panic!("error: {:?}", err);
         }
         assert_eq!(true, m.compare(&r, |(x, y): (&f64, &f64)| *x == *y));
+    }
+
+    #[test]
+    fn test_copy_to_self() {
+        let (rows, cols): (usize, usize) = (10, 10);
+        let mut origin = Matrix::new(rows, cols, Sigmoid::new());
+        origin.randomize();
+        let mut copy = Matrix::new(rows, cols, Sigmoid::new());
+        if let Err(err) = copy.copy_to_self(&origin) {
+            panic!("error: {:?}", err);
+        }
+        assert_eq!(true, origin.compare(&copy, |(x, y): (&f64, &f64)| *x == *y));
+    }
+
+    #[test]
+    fn test_dot_0() {
+        let a = Matrix {
+            rows: 3,
+            cols: 3,
+            values: vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
+            act_deact: Tanh::new(),
+        };
+        let b = Matrix {
+            rows: 3,
+            cols: 2,
+            values: vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            act_deact: Tanh::new(),
+        };
+        let result = Matrix {
+            rows: 3,
+            cols: 2,
+            values: vec![22.0, 28.0, 49.0, 64.0, 76.0, 100.0],
+            act_deact: Tanh::new(),
+        };
+        let mut receiver = Matrix::new(3, 2, Tanh::new());
+
+        if let Err(err) = receiver.dot(&a, &b) {
+            panic!("error: {:?}", err);
+        }
+
+        assert_eq!(
+            true,
+            receiver.compare(&result, |(x, y): (&f64, &f64)| *x == *y)
+        );
+    }
+
+    #[test]
+    fn test_dot_1() {
+        let a = Matrix {
+            rows: 2,
+            cols: 3,
+            values: vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            act_deact: Tanh::new(),
+        };
+        let b = Matrix {
+            rows: 3,
+            cols: 2,
+            values: vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0],
+            act_deact: Tanh::new(),
+        };
+        let result = Matrix {
+            rows: 2,
+            cols: 2,
+            values: vec![58.0, 64.0, 139.0, 154.0],
+            act_deact: Tanh::new(),
+        };
+        let mut receiver = Matrix::new(2, 2, Tanh::new());
+
+        if let Err(err) = receiver.dot(&a, &b) {
+            panic!("error: {:?}", err);
+        }
+
+        assert_eq!(
+            true,
+            receiver.compare(&result, |(x, y): (&f64, &f64)| *x == *y)
+        );
+    }
+
+    #[test]
+    fn test_dot_2() {
+        let a = Matrix {
+            rows: 3,
+            cols: 4,
+            values: vec![
+                1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
+            ],
+            act_deact: Tanh::new(),
+        };
+        let b = Matrix {
+            rows: 4,
+            cols: 2,
+            values: vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0],
+            act_deact: Tanh::new(),
+        };
+        let result = Matrix {
+            rows: 3,
+            cols: 2,
+            values: vec![50.0, 60.0, 114.0, 140.0, 178.0, 220.0],
+            act_deact: Tanh::new(),
+        };
+        let mut receiver = Matrix::new(3, 2, Tanh::new());
+
+        if let Err(err) = receiver.dot(&a, &b) {
+            panic!("error: {:?}", err);
+        }
+
+        assert_eq!(
+            true,
+            receiver.compare(&result, |(x, y): (&f64, &f64)| *x == *y)
+        );
     }
 }
