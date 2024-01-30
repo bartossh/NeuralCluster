@@ -7,6 +7,7 @@ pub enum MatrixError {
     OutsideRange,
     FilterToLarge,
     NotMatchingSize,
+    Falal,
 }
 
 /// Matrix holds values in a matrix of specified number of rows and columns.
@@ -169,7 +170,11 @@ impl<T: ActivatiorDeactivatior + Copy> Matrix<T> {
                 let mut sum: f64 = 0.0;
                 for rf in 0..filter.rows {
                     'filter: for cf in 0..filter.cols {
-                        if r + rf < fr_pad || c + cf < fc_pad {
+                        if r + rf < fr_pad
+                            || c + cf < fc_pad
+                            || r + rf - fr_pad >= self.rows
+                            || c + cf - fc_pad >= self.cols
+                        {
                             continue 'filter;
                         }
                         let rpi: usize = r + rf - fr_pad;
@@ -178,6 +183,8 @@ impl<T: ActivatiorDeactivatior + Copy> Matrix<T> {
                         let fvo = filter.get_at(rf, cf);
                         if let (Ok(sv), Ok(fv)) = (svo, fvo) {
                             sum += sv * fv;
+                        } else {
+                            return Err(MatrixError::Falal);
                         }
                     }
                 }
@@ -201,7 +208,7 @@ impl<T: ActivatiorDeactivatior + Copy> Matrix<T> {
         Ok(())
     }
 
-    /// dot applies dot product of two given matrices to the self matrix
+    /// dot applies dot product of two given matrices to the self
     ///
     pub fn dot(&mut self, a: &Matrix<T>, b: &Matrix<T>) -> Result<(), MatrixError> {
         if a.cols != b.rows || self.rows != a.rows || self.cols != b.cols {
@@ -218,7 +225,30 @@ impl<T: ActivatiorDeactivatior + Copy> Matrix<T> {
                     if let (Ok(mut svv), Ok(avv), Ok(bvv)) = (sv, av, bv) {
                         svv += avv * bvv;
                         let _ = self.set_at(sr, sc, svv);
+                    } else {
+                        return Err(MatrixError::Falal);
                     }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// sum sums up other matrix to self
+    ///
+    pub fn sum(&mut self, other: &Matrix<T>) -> Result<(), MatrixError> {
+        if self.rows != other.rows || self.cols != other.cols {
+            return Err(MatrixError::NotMatchingSize);
+        }
+
+        for r in 0..self.rows {
+            for c in 0..self.cols {
+                if let (Ok(mut sv), Ok(ov)) = (self.get_at(r, c), other.get_at(r, c)) {
+                    sv += ov;
+                    let _ = self.set_at(r, c, sv);
+                } else {
+                    return Err(MatrixError::Falal);
                 }
             }
         }
@@ -619,6 +649,74 @@ mod tests {
         let mut receiver = Matrix::new(3, 2, Tanh::new());
 
         if let Err(err) = receiver.dot(&a, &b) {
+            panic!("error: {:?}", err);
+        }
+
+        assert_eq!(
+            true,
+            receiver.compare(&result, |(x, y): (&f64, &f64)| *x == *y)
+        );
+    }
+
+    #[test]
+    fn test_sum_0() {
+        let mut receiver = Matrix {
+            rows: 3,
+            cols: 3,
+            values: vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
+            act_deact: Tanh::new(),
+        };
+        let a = Matrix {
+            rows: 3,
+            cols: 3,
+            values: vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
+            act_deact: Tanh::new(),
+        };
+        let result = Matrix {
+            rows: 3,
+            cols: 3,
+            values: vec![2.0, 4.0, 6.0, 8.0, 10.0, 12.0, 14.0, 16.0, 18.0],
+            act_deact: Tanh::new(),
+        };
+
+        if let Err(err) = receiver.sum(&a) {
+            panic!("error: {:?}", err);
+        }
+
+        assert_eq!(
+            true,
+            receiver.compare(&result, |(x, y): (&f64, &f64)| *x == *y)
+        );
+    }
+
+    #[test]
+    fn test_sum_1() {
+        let mut receiver = Matrix {
+            rows: 3,
+            cols: 4,
+            values: vec![
+                1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
+            ],
+            act_deact: Tanh::new(),
+        };
+        let a = Matrix {
+            rows: 3,
+            cols: 4,
+            values: vec![
+                1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
+            ],
+            act_deact: Tanh::new(),
+        };
+        let result = Matrix {
+            rows: 3,
+            cols: 4,
+            values: vec![
+                2.0, 4.0, 6.0, 8.0, 10.0, 12.0, 14.0, 16.0, 18.0, 20.0, 22.0, 24.0,
+            ],
+            act_deact: Tanh::new(),
+        };
+
+        if let Err(err) = receiver.sum(&a) {
             panic!("error: {:?}", err);
         }
 
