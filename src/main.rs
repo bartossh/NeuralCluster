@@ -1,5 +1,6 @@
 mod abstractions;
 mod activators;
+mod float_math;
 mod matrix;
 
 fn main() {
