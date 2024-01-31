@@ -1,4 +1,41 @@
-use crate::abstractions::ActivatiorDeactivatior;
+use std::fmt;
+
+/// ActivatiorDeactivatior trait allows to activate and deactivate value
+///
+pub trait ActivatorDeactivator {
+    fn act_f(&self, x: &mut f64);
+    fn de_act_f(&self, x: &mut f64);
+}
+
+impl fmt::Debug for dyn ActivatorDeactivator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "ActivatorDeactivator")
+    }
+}
+
+/// ActivatorOption describes activator option
+///
+#[derive(Copy, Clone, Debug)]
+pub enum ActivatorOption {
+    Sigmoid,
+    Tanh,
+    ReLU,
+    LeakyReLu,
+}
+
+impl ActivatorOption {
+    /// get_activator returns coresponding ActivatiorDeactivatior if exsists or None
+    ///
+    pub fn get_activator(&self, alpha: f64) -> Option<Box<dyn ActivatorDeactivator>> {
+        match self {
+            ActivatorOption::Sigmoid => Some(Box::new(Sigmoid::new())),
+            ActivatorOption::Tanh => Some(Box::new(Tanh::new())),
+            ActivatorOption::ReLU => Some(Box::new(ReLU::new())),
+            ActivatorOption::Sigmoid => Some(Box::new(LeakyReLU::new(alpha))),
+            _ => None,
+        }
+    }
+}
 
 /// Sigmoid is an entity allowing to perform sigmid activation and deactivation
 ///
@@ -13,7 +50,7 @@ impl Sigmoid {
     }
 }
 
-impl ActivatiorDeactivatior for Sigmoid {
+impl ActivatorDeactivator for Sigmoid {
     fn act_f(&self, x: &mut f64) {
         *x = 1.0 / (1.0 + f64::exp(-*x));
     }
@@ -36,7 +73,7 @@ impl Tanh {
     }
 }
 
-impl ActivatiorDeactivatior for Tanh {
+impl ActivatorDeactivator for Tanh {
     fn act_f(&self, x: &mut f64) {
         *x = x.tanh();
     }
@@ -59,7 +96,7 @@ impl ReLU {
     }
 }
 
-impl ActivatiorDeactivatior for ReLU {
+impl ActivatorDeactivator for ReLU {
     fn act_f(&self, x: &mut f64) {
         *x = x.max(0.0);
     }
@@ -84,7 +121,7 @@ impl LeakyReLU {
     }
 }
 
-impl ActivatiorDeactivatior for LeakyReLU {
+impl ActivatorDeactivator for LeakyReLU {
     fn act_f(&self, x: &mut f64) {
         *x = match *x {
             x if x > 0.0 => x,

@@ -1,7 +1,9 @@
-use crate::abstractions::ActivatiorDeactivatior;
+use crate::activators::ActivatorDeactivator;
 use rand::rngs::OsRng;
 use rand::RngCore;
 
+/// MatrixError rempresents matrix crate errors
+///
 #[derive(Clone, Debug, PartialEq)]
 pub enum MatrixError {
     OutsideRange,
@@ -74,10 +76,10 @@ impl Matrix {
 
     /// activate activates all values
     ///
-    pub fn activate(&mut self, a: &dyn ActivatiorDeactivatior) {
+    pub fn activate(&mut self, a: &dyn ActivatorDeactivator) {
         self.values.iter_mut().for_each(|v: &mut f64| a.act_f(v));
     }
-    pub fn de_activate(&mut self, d: &dyn ActivatiorDeactivatior) {
+    pub fn de_activate(&mut self, d: &dyn ActivatorDeactivator) {
         self.values.iter_mut().for_each(|v: &mut f64| d.de_act_f(v));
     }
 

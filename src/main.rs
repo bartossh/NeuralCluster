@@ -1,7 +1,7 @@
-mod abstractions;
 mod activators;
 mod float_math;
 mod matrix;
+mod nn;
 
 fn main() {
     println!("Hello, world!");
