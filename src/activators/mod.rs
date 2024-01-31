@@ -14,11 +14,11 @@ impl Sigmoid {
 }
 
 impl ActivatiorDeactivatior for Sigmoid {
-    fn act_f(self, x: &mut f64) {
+    fn act_f(&self, x: &mut f64) {
         *x = 1.0 / (1.0 + f64::exp(-*x));
     }
 
-    fn de_act_f(self, x: &mut f64) {
+    fn de_act_f(&self, x: &mut f64) {
         *x = *x * (1.0 - *x);
     }
 }
@@ -37,11 +37,11 @@ impl Tanh {
 }
 
 impl ActivatiorDeactivatior for Tanh {
-    fn act_f(self, x: &mut f64) {
+    fn act_f(&self, x: &mut f64) {
         *x = x.tanh();
     }
 
-    fn de_act_f(self, x: &mut f64) {
+    fn de_act_f(&self, x: &mut f64) {
         *x = x.atanh();
     }
 }
@@ -60,11 +60,11 @@ impl ReLU {
 }
 
 impl ActivatiorDeactivatior for ReLU {
-    fn act_f(self, x: &mut f64) {
+    fn act_f(&self, x: &mut f64) {
         *x = x.max(0.0);
     }
 
-    fn de_act_f(self, x: &mut f64) {
+    fn de_act_f(&self, x: &mut f64) {
         *x = x.max(0.0);
     }
 }
@@ -85,14 +85,14 @@ impl LeakyReLU {
 }
 
 impl ActivatiorDeactivatior for LeakyReLU {
-    fn act_f(self, x: &mut f64) {
+    fn act_f(&self, x: &mut f64) {
         *x = match *x {
             x if x > 0.0 => x,
             _ => self.alpha * *x,
         };
     }
 
-    fn de_act_f(self, x: &mut f64) {
+    fn de_act_f(&self, x: &mut f64) {
         self.act_f(x);
     }
 }

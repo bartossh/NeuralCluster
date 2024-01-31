@@ -13,21 +13,19 @@ pub enum MatrixError {
 /// Matrix holds values in a matrix of specified number of rows and columns.
 ///
 #[derive(Clone, Debug)]
-pub struct Matrix<T: ActivatiorDeactivatior + Copy> {
+pub struct Matrix {
     rows: usize,
     cols: usize,
-    act_deact: T,
     values: Vec<f64>,
 }
 
-impl<T: ActivatiorDeactivatior + Copy> Matrix<T> {
+impl Matrix {
     /// new creates an instance of a new Matrix
     ///
-    pub fn new(rows: usize, cols: usize, act_deact: T) -> Matrix<T> {
+    pub fn new(rows: usize, cols: usize) -> Matrix {
         return Matrix {
             rows: rows,
             cols: cols,
-            act_deact: act_deact,
             values: vec![0.0; (rows * cols) as usize],
         };
     }
@@ -74,17 +72,13 @@ impl<T: ActivatiorDeactivatior + Copy> Matrix<T> {
             .for_each(|v: &mut f64| *v = rng.next_u64() as f64 / u64::MAX as f64)
     }
 
-    /// activatel activates all values
+    /// activate activates all values
     ///
-    pub fn activate(&mut self) {
-        self.values
-            .iter_mut()
-            .for_each(|v: &mut f64| self.act_deact.act_f(v));
+    pub fn activate(&mut self, a: &dyn ActivatiorDeactivatior) {
+        self.values.iter_mut().for_each(|v: &mut f64| a.act_f(v));
     }
-    pub fn de_activate(&mut self) {
-        self.values
-            .iter_mut()
-            .for_each(|v: &mut f64| self.act_deact.de_act_f(v));
+    pub fn de_activate(&mut self, d: &dyn ActivatiorDeactivatior) {
+        self.values.iter_mut().for_each(|v: &mut f64| d.de_act_f(v));
     }
 
     /// print prints Matrix to stdout
@@ -136,7 +130,7 @@ impl<T: ActivatiorDeactivatior + Copy> Matrix<T> {
 
     /// compare compares all the matrix values with other matrix values
     ///
-    pub fn compare(&self, other: &Matrix<T>, f: fn((&f64, &f64)) -> bool) -> bool {
+    pub fn compare(&self, other: &Matrix, f: fn((&f64, &f64)) -> bool) -> bool {
         if self.rows != other.rows || self.cols != other.cols {
             return false;
         }
@@ -155,7 +149,7 @@ impl<T: ActivatiorDeactivatior + Copy> Matrix<T> {
     /// convolve convolves the matrix with given filter,
     /// adds necessary padding
     ///
-    pub fn convolve(&mut self, filter: &Matrix<T>) -> Result<(), MatrixError> {
+    pub fn convolve(&mut self, filter: &Matrix) -> Result<(), MatrixError> {
         if self.rows < filter.rows || self.cols < filter.cols {
             return Err(MatrixError::FilterToLarge);
         }
@@ -199,7 +193,7 @@ impl<T: ActivatiorDeactivatior + Copy> Matrix<T> {
 
     /// copy_to_self copies other matrix to self if matrix has the same size
     ///
-    pub fn copy_to_self(&mut self, other: &Matrix<T>) -> Result<(), MatrixError> {
+    pub fn copy_to_self(&mut self, other: &Matrix) -> Result<(), MatrixError> {
         if self.rows != other.rows || self.cols != other.cols {
             return Err(MatrixError::OutsideRange);
         }
@@ -210,7 +204,7 @@ impl<T: ActivatiorDeactivatior + Copy> Matrix<T> {
 
     /// dot applies dot product of two given matrices to the self
     ///
-    pub fn dot(&mut self, a: &Matrix<T>, b: &Matrix<T>) -> Result<(), MatrixError> {
+    pub fn dot(&mut self, a: &Matrix, b: &Matrix) -> Result<(), MatrixError> {
         if a.cols != b.rows || self.rows != a.rows || self.cols != b.cols {
             return Err(MatrixError::NotMatchingSize);
         }
@@ -237,7 +231,7 @@ impl<T: ActivatiorDeactivatior + Copy> Matrix<T> {
 
     /// sum sums up other matrix to self
     ///
-    pub fn sum(&mut self, other: &Matrix<T>) -> Result<(), MatrixError> {
+    pub fn sum(&mut self, other: &Matrix) -> Result<(), MatrixError> {
         if self.rows != other.rows || self.cols != other.cols {
             return Err(MatrixError::NotMatchingSize);
         }
@@ -266,7 +260,7 @@ mod tests {
     #[test]
     fn test_create_matrix_and_getters() {
         let (rows, cols): (usize, usize) = (10, 20);
-        let m = Matrix::new(rows, cols, Sigmoid::new());
+        let m = Matrix::new(rows, cols);
         assert_eq!(m.get_rows_num(), rows);
         assert_eq!(m.get_cols_num(), cols);
     }
@@ -274,7 +268,7 @@ mod tests {
     #[test]
     fn test_randomize_matrix() {
         let (rows, cols): (usize, usize) = (10, 20);
-        let mut m = Matrix::new(rows, cols, Sigmoid::new());
+        let mut m = Matrix::new(rows, cols);
         m.randomize();
         m.values
             .iter()
@@ -284,7 +278,7 @@ mod tests {
     #[test]
     fn test_get_at() {
         let (rows, cols): (usize, usize) = (10, 20);
-        let mut m = Matrix::new(rows, cols, Sigmoid::new());
+        let mut m = Matrix::new(rows, cols);
         m.randomize();
         for r in 0..m.get_rows_num() {
             for c in 0..m.get_cols_num() {
@@ -310,7 +304,7 @@ mod tests {
     #[test]
     fn test_set_at() {
         let (rows, cols): (usize, usize) = (10, 20);
-        let mut m = Matrix::new(rows, cols, Sigmoid::new());
+        let mut m = Matrix::new(rows, cols);
         for r in 0..m.get_rows_num() {
             for c in 0..m.get_cols_num() {
                 if let Err(err) = m.set_at(r, c, 0.10) {
@@ -326,12 +320,12 @@ mod tests {
     }
 
     #[test]
-    fn test_activate_matrix_value() {
+    fn test_activate_matrix_value_sig() {
         let (rows, cols): (usize, usize) = (10, 20);
-        let mut m = Matrix::new(rows, cols, Sigmoid::new());
+        let mut m = Matrix::new(rows, cols);
         m.randomize();
         let cp_m = m.clone();
-        m.activate();
+        m.activate(&Sigmoid::new());
         m.values
             .iter()
             .zip(cp_m.values.iter())
@@ -341,24 +335,114 @@ mod tests {
     }
 
     #[test]
-    fn test_de_activate_matrix_value() {
+    fn test_activate_matrix_value_tanh() {
         let (rows, cols): (usize, usize) = (10, 20);
-        let mut m = Matrix::new(rows, cols, Sigmoid::new());
+        let mut m = Matrix::new(rows, cols);
         m.randomize();
         let cp_m = m.clone();
-        m.de_activate();
+        m.activate(&Tanh::new());
         m.values
             .iter()
             .zip(cp_m.values.iter())
             .for_each(|(x, y): (&f64, &f64)| {
                 assert_ne!(*x, *y);
+            });
+    }
+
+    #[test]
+    fn test_activate_matrix_value_relu() {
+        let (rows, cols): (usize, usize) = (10, 20);
+        let mut m = Matrix::new(rows, cols);
+        m.randomize();
+        let cp_m = m.clone();
+        m.activate(&ReLU::new());
+        m.values
+            .iter()
+            .zip(cp_m.values.iter())
+            .for_each(|(x, y): (&f64, &f64)| {
+                assert_eq!(*x, *y);
+            });
+    }
+
+    #[test]
+    fn test_activate_matrix_value_leaky_relu() {
+        let (rows, cols): (usize, usize) = (10, 20);
+        let mut m = Matrix::new(rows, cols);
+        m.randomize();
+        let cp_m = m.clone();
+        m.activate(&LeakyReLU::new(1.1));
+        m.values
+            .iter()
+            .zip(cp_m.values.iter())
+            .for_each(|(x, y): (&f64, &f64)| {
+                assert_eq!(*x, *y);
+            });
+    }
+
+    #[test]
+    fn test_de_activate_matrix_value_sig() {
+        let (rows, cols): (usize, usize) = (10, 20);
+        let mut m = Matrix::new(rows, cols);
+        m.randomize();
+        let cp_m = m.clone();
+        m.de_activate(&Sigmoid::new());
+        m.values
+            .iter()
+            .zip(cp_m.values.iter())
+            .for_each(|(x, y): (&f64, &f64)| {
+                assert_ne!(*x, *y);
+            });
+    }
+
+    #[test]
+    fn test_de_activate_matrix_value_tanh() {
+        let (rows, cols): (usize, usize) = (10, 20);
+        let mut m = Matrix::new(rows, cols);
+        m.randomize();
+        let cp_m = m.clone();
+        m.de_activate(&Tanh::new());
+        m.values
+            .iter()
+            .zip(cp_m.values.iter())
+            .for_each(|(x, y): (&f64, &f64)| {
+                assert_ne!(*x, *y);
+            });
+    }
+
+    #[test]
+    fn test_de_activate_matrix_value_relu() {
+        let (rows, cols): (usize, usize) = (10, 20);
+        let mut m = Matrix::new(rows, cols);
+        m.randomize();
+        let cp_m = m.clone();
+        m.de_activate(&ReLU::new());
+        m.values
+            .iter()
+            .zip(cp_m.values.iter())
+            .for_each(|(x, y): (&f64, &f64)| {
+                assert_eq!(*x, *y);
+            });
+    }
+
+    #[test]
+    fn test_de_activate_matrix_value_leaky_relu() {
+        let (rows, cols): (usize, usize) = (10, 20);
+        let mut m = Matrix::new(rows, cols);
+        m.randomize();
+        let cp_m = m.clone();
+        m.de_activate(&LeakyReLU::new(1.1));
+        m.values
+            .iter()
+            .zip(cp_m.values.iter())
+            .for_each(|(x, y): (&f64, &f64)| {
+                assert_eq!(*x, *y);
             });
     }
 
     #[test]
     fn test_normalize_unarmalize_values() {
         let (rows, cols): (usize, usize) = (10, 10);
-        let mut m = Matrix::new(rows, cols, Sigmoid::new());
+        let mut m = Matrix::new(rows, cols);
         m.randomize();
         let nom_m = m.clone();
         m.unormalize(0.0, 100.0);
@@ -385,7 +469,6 @@ mod tests {
                 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0,
                 7.0, 8.0, 9.0, 10.0,
             ],
-            act_deact: Sigmoid::new(),
         };
         let (min, max) = m.min_max();
         assert_eq!(min, 0.0);
@@ -406,7 +489,6 @@ mod tests {
                 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0,
                 7.0, 8.0, 9.0, 10.0,
             ],
-            act_deact: Sigmoid::new(),
         };
         let m1 = Matrix {
             rows: 10,
@@ -420,7 +502,6 @@ mod tests {
                 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0,
                 7.0, 8.0, 9.0, 10.0,
             ],
-            act_deact: Sigmoid::new(),
         };
         assert_eq!(true, m0.compare(&m1, |(x, y): (&f64, &f64)| *x == *y));
     }
@@ -439,7 +520,6 @@ mod tests {
                 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0,
                 8.0, 9.0, 10.0, 1.0,
             ],
-            act_deact: Sigmoid::new(),
         };
         let m1 = Matrix {
             rows: 10,
@@ -453,7 +533,6 @@ mod tests {
                 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0,
                 7.0, 8.0, 9.0, 10.0,
             ],
-            act_deact: Sigmoid::new(),
         };
         assert_eq!(false, m0.compare(&m1, |(x, y): (&f64, &f64)| *x == *y));
     }
@@ -461,7 +540,7 @@ mod tests {
     #[test]
     fn test_zero() {
         let (rows, cols): (usize, usize) = (10, 10);
-        let mut m = Matrix::new(rows, cols, Sigmoid::new());
+        let mut m = Matrix::new(rows, cols);
         m.randomize();
         m.zero();
         m.values.iter().for_each(|v: &f64| {
@@ -475,13 +554,11 @@ mod tests {
             rows: 3,
             cols: 3,
             values: vec![1.0, 2.0, 1.0, 1.0, 2.0, 1.0, 1.0, 2.0, 1.0],
-            act_deact: Sigmoid::new(),
         };
         let f = Matrix {
             rows: 3,
             cols: 3,
             values: vec![1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
-            act_deact: Sigmoid::new(),
         };
         let r = Matrix {
             rows: 3,
@@ -489,7 +566,6 @@ mod tests {
             values: vec![
                 6.000, 8.000, 6.000, 9.000, 12.000, 9.000, 6.000, 8.000, 6.000,
             ],
-            act_deact: Sigmoid::new(),
         };
 
         if let Err(err) = m.convolve(&f) {
@@ -513,7 +589,6 @@ mod tests {
                 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0,
                 10.0, 10.0,
             ],
-            act_deact: Sigmoid::new(),
         };
         let f = Matrix {
             rows: 5,
@@ -522,7 +597,6 @@ mod tests {
                 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.0, 0.0,
                 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
             ],
-            act_deact: Sigmoid::new(),
         };
         let r = Matrix {
             rows: 10,
@@ -539,7 +613,6 @@ mod tests {
                 60.000, 90.000, 90.000, 90.000, 90.000, 90.000, 90.000, 90.000, 90.000, 60.000,
                 40.000, 60.000, 60.000, 60.000, 60.000, 60.000, 60.000, 60.000, 60.000, 40.000,
             ],
-            act_deact: Sigmoid::new(),
         };
 
         if let Err(err) = m.convolve(&f) {
@@ -551,9 +624,9 @@ mod tests {
     #[test]
     fn test_copy_to_self() {
         let (rows, cols): (usize, usize) = (10, 10);
-        let mut origin = Matrix::new(rows, cols, Sigmoid::new());
+        let mut origin = Matrix::new(rows, cols);
         origin.randomize();
-        let mut copy = Matrix::new(rows, cols, Sigmoid::new());
+        let mut copy = Matrix::new(rows, cols);
         if let Err(err) = copy.copy_to_self(&origin) {
             panic!("error: {:?}", err);
         }
@@ -566,21 +639,18 @@ mod tests {
             rows: 3,
             cols: 3,
             values: vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
-            act_deact: Tanh::new(),
         };
         let b = Matrix {
             rows: 3,
             cols: 2,
             values: vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-            act_deact: Tanh::new(),
         };
         let result = Matrix {
             rows: 3,
             cols: 2,
             values: vec![22.0, 28.0, 49.0, 64.0, 76.0, 100.0],
-            act_deact: Tanh::new(),
         };
-        let mut receiver = Matrix::new(3, 2, Tanh::new());
+        let mut receiver = Matrix::new(3, 2);
 
         if let Err(err) = receiver.dot(&a, &b) {
             panic!("error: {:?}", err);
@@ -598,21 +668,18 @@ mod tests {
             rows: 2,
             cols: 3,
             values: vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-            act_deact: Tanh::new(),
         };
         let b = Matrix {
             rows: 3,
             cols: 2,
             values: vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0],
-            act_deact: Tanh::new(),
         };
         let result = Matrix {
             rows: 2,
             cols: 2,
             values: vec![58.0, 64.0, 139.0, 154.0],
-            act_deact: Tanh::new(),
         };
-        let mut receiver = Matrix::new(2, 2, Tanh::new());
+        let mut receiver = Matrix::new(2, 2);
 
         if let Err(err) = receiver.dot(&a, &b) {
             panic!("error: {:?}", err);
@@ -632,21 +699,18 @@ mod tests {
             values: vec![
                 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
             ],
-            act_deact: Tanh::new(),
         };
         let b = Matrix {
             rows: 4,
             cols: 2,
             values: vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0],
-            act_deact: Tanh::new(),
         };
         let result = Matrix {
             rows: 3,
             cols: 2,
             values: vec![50.0, 60.0, 114.0, 140.0, 178.0, 220.0],
-            act_deact: Tanh::new(),
         };
-        let mut receiver = Matrix::new(3, 2, Tanh::new());
+        let mut receiver = Matrix::new(3, 2);
 
         if let Err(err) = receiver.dot(&a, &b) {
             panic!("error: {:?}", err);
@@ -664,19 +728,16 @@ mod tests {
             rows: 3,
             cols: 3,
             values: vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
-            act_deact: Tanh::new(),
         };
         let a = Matrix {
             rows: 3,
             cols: 3,
             values: vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
-            act_deact: Tanh::new(),
         };
         let result = Matrix {
             rows: 3,
             cols: 3,
             values: vec![2.0, 4.0, 6.0, 8.0, 10.0, 12.0, 14.0, 16.0, 18.0],
-            act_deact: Tanh::new(),
         };
 
         if let Err(err) = receiver.sum(&a) {
@@ -697,7 +758,6 @@ mod tests {
             values: vec![
                 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
             ],
-            act_deact: Tanh::new(),
         };
         let a = Matrix {
             rows: 3,
@@ -705,7 +765,6 @@ mod tests {
             values: vec![
                 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
             ],
-            act_deact: Tanh::new(),
         };
         let result = Matrix {
             rows: 3,
@@ -713,7 +772,6 @@ mod tests {
             values: vec![
                 2.0, 4.0, 6.0, 8.0, 10.0, 12.0, 14.0, 16.0, 18.0, 20.0, 22.0, 24.0,
             ],
-            act_deact: Tanh::new(),
         };
 
         if let Err(err) = receiver.sum(&a) {
