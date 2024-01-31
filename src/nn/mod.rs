@@ -60,6 +60,20 @@ impl NN {
 
         Ok(NN { layers: layers })
     }
+
+    /// randomize randomizes all the activations, bies and weigths layser
+    ///
+    pub fn randomize(&mut self) {
+        self.layers.iter_mut().for_each(|l| {
+            l.activations.randomize();
+            if let Some(ref mut bias) = l.bias {
+                bias.randomize();
+            }
+            if let Some(ref mut bias) = l.bias {
+                bias.randomize();
+            }
+        });
+    }
 }
 
 #[cfg(test)]
@@ -91,5 +105,33 @@ mod tests {
             Ok(nn) => assert_eq!(nn.layers.len(), 3),
             Err(err) => panic!("error: {:?}", err),
         };
+    }
+
+    #[test]
+    fn test_randomize_nn() {
+        let schema: Vec<LayerSchema> = vec![
+            LayerSchema {
+                size: 10,
+                activator: ActivatorOption::Sigmoid,
+                alpha: 0.0,
+            },
+            LayerSchema {
+                size: 10,
+                activator: ActivatorOption::Tanh,
+                alpha: 0.0,
+            },
+            LayerSchema {
+                size: 10,
+                activator: ActivatorOption::ReLU,
+                alpha: 0.0,
+            },
+        ];
+        let nn = NN::new(&schema);
+        let mut nnn = nn.unwrap();
+        nnn.randomize();
+
+        if let Ok(value) = nnn.layers[2].activations.get_at(0, 0) {
+            assert_ne!(value, 0.0);
+        }
     }
 }
