@@ -2,7 +2,7 @@ use crate::activators::ActivatorDeactivator;
 use rand::rngs::OsRng;
 use rand::RngCore;
 
-/// MatrixError rempresents matrix crate errors
+/// Matrix crate errors.
 ///
 #[derive(Clone, Debug, PartialEq)]
 pub enum MatrixError {
@@ -12,7 +12,7 @@ pub enum MatrixError {
     Falal,
 }
 
-/// Matrix holds values in a matrix of specified number of rows and columns.
+/// Matrix with f64 values stored in rows, cols order.
 ///
 #[derive(Clone, Debug)]
 pub struct Matrix {
@@ -22,7 +22,7 @@ pub struct Matrix {
 }
 
 impl Matrix {
-    /// new creates an instance of a new Matrix
+    /// Creates an instance of a new Matrix.
     ///
     pub fn new(rows: usize, cols: usize) -> Matrix {
         return Matrix {
@@ -32,19 +32,19 @@ impl Matrix {
         };
     }
 
-    /// get_rows_num returns number of rows
+    /// Returns number of rows.
     ///
     pub fn get_rows_num(&self) -> usize {
         self.rows
     }
 
-    /// get_cols_num returns number of columns
+    /// Returns number of columns.
     ///
     pub fn get_cols_num(&self) -> usize {
         self.cols
     }
 
-    /// get_at returns value at given row and col
+    /// Returns value at given row and column.
     ///
     pub fn get_at(&self, row: usize, col: usize) -> Result<f64, MatrixError> {
         if row >= self.rows || col >= self.cols {
@@ -54,7 +54,7 @@ impl Matrix {
         Ok(self.values[row * self.cols + col])
     }
 
-    /// set_at sets value at given row and column
+    /// Sets value at given row and column.
     ///
     pub fn set_at(&mut self, row: usize, col: usize, value: f64) -> Result<(), MatrixError> {
         if row >= self.rows || col >= self.cols {
@@ -65,7 +65,7 @@ impl Matrix {
         Ok(())
     }
 
-    /// randomize randomizes all values in the Matrix
+    /// Randomizes all values.
     ///
     pub fn randomize(&mut self) {
         let mut rng = OsRng;
@@ -74,7 +74,7 @@ impl Matrix {
             .for_each(|v: &mut f64| *v = rng.next_u64() as f64 / u64::MAX as f64)
     }
 
-    /// activate activates all values
+    /// Activates all values.
     ///
     pub fn activate(&mut self, a: &dyn ActivatorDeactivator) {
         self.values.iter_mut().for_each(|v: &mut f64| a.act_f(v));
@@ -83,7 +83,7 @@ impl Matrix {
         self.values.iter_mut().for_each(|v: &mut f64| d.de_act_f(v));
     }
 
-    /// print prints Matrix to stdout
+    /// Prints values in row - column order.
     ///
     pub fn print(&self) {
         println!("matrix = [");
@@ -97,7 +97,7 @@ impl Matrix {
         println!("  ]");
     }
 
-    /// normalize normalizes the value between min and max
+    /// Normalizes all values between min and max.
     ///
     pub fn normalize(&mut self, min: f64, max: f64) {
         self.values
@@ -105,13 +105,15 @@ impl Matrix {
             .for_each(|x: &mut f64| *x = (*x - min) / (max - min));
     }
 
+    /// Unormalizes values between min and max.
+    ///
     pub fn unormalize(&mut self, min: f64, max: f64) {
         self.values.iter_mut().for_each(|x: &mut f64| {
             *x = *x * (max - min) + min;
         })
     }
 
-    /// min_max returns min and max values
+    /// Returns min and max values.
     ///
     pub fn min_max(&self) -> (f64, f64) {
         if self.values.len() == 0 {
@@ -130,7 +132,7 @@ impl Matrix {
         (min, max)
     }
 
-    /// compare compares all the matrix values with other matrix values
+    /// Compares the size and all the self values with other matrix values.
     ///
     pub fn compare(&self, other: &Matrix, f: fn((&f64, &f64)) -> bool) -> bool {
         if self.rows != other.rows || self.cols != other.cols {
@@ -142,14 +144,14 @@ impl Matrix {
         self.values.iter().zip(other.values.iter()).all(f)
     }
 
-    /// zero zeros all values in matrix
+    /// Zeros all values in the self matrix.
     ///
     pub fn zero(&mut self) {
         self.values.iter_mut().for_each(|v: &mut f64| *v = 0.0);
     }
 
-    /// convolve convolves the matrix with given filter,
-    /// adds necessary padding
+    /// Convolves the matrix with given filter,
+    /// adds necessary padding.
     ///
     pub fn convolve(&mut self, filter: &Matrix) -> Result<(), MatrixError> {
         if self.rows < filter.rows || self.cols < filter.cols {
@@ -193,7 +195,7 @@ impl Matrix {
         Ok(())
     }
 
-    /// copy_to_self copies other matrix to self if matrix has the same size
+    /// Copies other matrix to self if matrix has the same size.
     ///
     pub fn copy_to_self(&mut self, other: &Matrix) -> Result<(), MatrixError> {
         if self.rows != other.rows || self.cols != other.cols {
@@ -204,7 +206,7 @@ impl Matrix {
         Ok(())
     }
 
-    /// dot applies dot product of two given matrices to the self
+    /// Applies dot product of two given matrices to the self matrix.
     ///
     pub fn dot(&mut self, a: &Matrix, b: &Matrix) -> Result<(), MatrixError> {
         if a.cols != b.rows || self.rows != a.rows || self.cols != b.cols {
@@ -231,7 +233,7 @@ impl Matrix {
         Ok(())
     }
 
-    /// sum sums up other matrix to self
+    /// Sums up other matrix to self.
     ///
     pub fn sum(&mut self, other: &Matrix) -> Result<(), MatrixError> {
         if self.rows != other.rows || self.cols != other.cols {

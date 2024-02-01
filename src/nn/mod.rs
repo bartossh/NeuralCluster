@@ -1,14 +1,14 @@
 use crate::activators::{ActivatorDeactivator, ActivatorOption, LeakyReLU, ReLU, Sigmoid, Tanh};
-use crate::matrix::Matrix;
+use crate::matrix::{Matrix, MatrixError};
 
-/// NNError represents nn crate errors
+/// NN crate errors.
 ///
 #[derive(Clone, Debug, PartialEq)]
 pub enum NNError {
     WrongSchemaLength,
 }
 
-/// LayerSchema describes the Layer schema
+/// Describes the Layer schema.
 ///
 #[derive(Clone, Debug)]
 struct LayerSchema {
@@ -17,7 +17,7 @@ struct LayerSchema {
     alpha: f64,
 }
 
-/// Layer contains Matrix with perceptron activator and deactivator of that matrix
+/// Contains activations, weights and bias matrices with perceptron activator and deactivator
 /// and all other functionalities to be applied to that layer
 ///
 #[derive(Debug)]
@@ -28,7 +28,7 @@ struct Layer {
     activator: Option<Box<dyn ActivatorDeactivator>>,
 }
 
-/// NN holds layers of neural network matrices and matrix perceptron activation logic
+/// Neural network.
 ///
 #[derive(Debug)]
 pub struct NN {
@@ -36,7 +36,7 @@ pub struct NN {
 }
 
 impl NN {
-    /// new creates a new instance of NN
+    /// Creates a new instance of NN.
     ///
     pub fn new(schema: &Vec<LayerSchema>) -> Result<NN, NNError> {
         if schema.len() < 3 {
@@ -61,7 +61,7 @@ impl NN {
         Ok(NN { layers: layers })
     }
 
-    /// randomize randomizes all the activations, bies and weigths layser
+    /// Randomizes all the activations, bies and weigths layser.
     ///
     pub fn randomize(&mut self) {
         self.layers.iter_mut().for_each(|l| {
@@ -73,6 +73,18 @@ impl NN {
                 bias.randomize();
             }
         });
+    }
+
+    /// Copies values from input matrix in to the first self layer.
+    ///
+    pub fn input(&mut self, input: &Matrix) -> Result<(), MatrixError> {
+        self.layers[0].activations.copy_to_self(input)
+    }
+
+    /// Copies values from the self output layer to the output matrix.
+    ///
+    pub fn output(&self, output: &mut Matrix) -> Result<(), MatrixError> {
+        output.copy_to_self(&self.layers[self.layers.len() - 1].activations)
     }
 }
 
@@ -133,5 +145,80 @@ mod tests {
         if let Ok(value) = nnn.layers[2].activations.get_at(0, 0) {
             assert_ne!(value, 0.0);
         }
+    }
+
+    #[test]
+    fn test_input_nn() {
+        let schema: Vec<LayerSchema> = vec![
+            LayerSchema {
+                size: 10,
+                activator: ActivatorOption::Sigmoid,
+                alpha: 0.0,
+            },
+            LayerSchema {
+                size: 10,
+                activator: ActivatorOption::Tanh,
+                alpha: 0.0,
+            },
+            LayerSchema {
+                size: 10,
+                activator: ActivatorOption::ReLU,
+                alpha: 0.0,
+            },
+        ];
+        let nn = NN::new(&schema);
+        let mut nnn = nn.unwrap();
+        nnn.randomize();
+
+        let mut input = Matrix::new(1, 10);
+        input.randomize();
+
+        if let Err(err) = nnn.input(&input) {
+            panic!("error: {:?}", err);
+        }
+
+        assert_eq!(
+            true,
+            nnn.layers[0]
+                .activations
+                .compare(&input, |(x, y): (&f64, &f64)| x == y)
+        )
+    }
+
+    #[test]
+    fn test_output_nn() {
+        let schema: Vec<LayerSchema> = vec![
+            LayerSchema {
+                size: 10,
+                activator: ActivatorOption::Sigmoid,
+                alpha: 0.0,
+            },
+            LayerSchema {
+                size: 10,
+                activator: ActivatorOption::Tanh,
+                alpha: 0.0,
+            },
+            LayerSchema {
+                size: 10,
+                activator: ActivatorOption::ReLU,
+                alpha: 0.0,
+            },
+        ];
+        let nn = NN::new(&schema);
+        let mut nnn = nn.unwrap();
+        nnn.randomize();
+
+        let mut output = Matrix::new(1, 10);
+
+        if let Err(err) = nnn.output(&mut output) {
+            panic!("error: {:?}", err);
+        }
+
+        assert_eq!(
+            true,
+            nnn.layers[nnn.layers.len() - 1]
+                .activations
+                .compare(&output, |(x, y): (&f64, &f64)| x == y)
+        )
     }
 }

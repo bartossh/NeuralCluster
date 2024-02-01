@@ -1,6 +1,6 @@
 use std::fmt;
 
-/// ActivatiorDeactivatior trait allows to activate and deactivate value
+/// Trait allows to activate and deactivate value.
 ///
 pub trait ActivatorDeactivator {
     fn act_f(&self, x: &mut f64);
@@ -13,7 +13,7 @@ impl fmt::Debug for dyn ActivatorDeactivator {
     }
 }
 
-/// ActivatorOption describes activator option
+/// Describes activator option.
 ///
 #[derive(Copy, Clone, Debug)]
 pub enum ActivatorOption {
@@ -24,7 +24,7 @@ pub enum ActivatorOption {
 }
 
 impl ActivatorOption {
-    /// get_activator returns coresponding ActivatiorDeactivatior if exsists or None
+    /// Returns coresponding ActivatiorDeactivatior if exsists or None.
     ///
     pub fn get_activator(&self, alpha: f64) -> Option<Box<dyn ActivatorDeactivator>> {
         match self {
@@ -43,7 +43,7 @@ impl ActivatorOption {
 pub struct Sigmoid;
 
 impl Sigmoid {
-    /// new returns new instance of Sigmoid
+    /// Returns new instance of Sigmoid.
     ///
     pub fn new() -> Sigmoid {
         Sigmoid {}
@@ -60,13 +60,13 @@ impl ActivatorDeactivator for Sigmoid {
     }
 }
 
-/// Tanh is an entity allowing to perform tangens activation and deactivation
+/// Performs tangens activation and deactivation.
 ///
 #[derive(Copy, Clone, Debug)]
 pub struct Tanh;
 
 impl Tanh {
-    /// new returns new instance of Tanh
+    /// Returns new instance of Tanh.
     ///
     pub fn new() -> Tanh {
         Tanh {}
@@ -83,13 +83,13 @@ impl ActivatorDeactivator for Tanh {
     }
 }
 
-/// ReLU is an entity allowing to perform Rectified Linear Unit activation and deactivation
+/// Performs Rectified Linear Unit activation and deactivation.
 ///
 #[derive(Copy, Clone, Debug)]
 pub struct ReLU;
 
 impl ReLU {
-    /// new returns new instance of ReLU
+    /// Returns new instance of ReLU.
     ///
     pub fn new() -> ReLU {
         ReLU {}
@@ -106,7 +106,7 @@ impl ActivatorDeactivator for ReLU {
     }
 }
 
-/// LeakyReLU is an entity allowing to perform Leaky Rectified Linear Unit activation and deactivation
+/// Performs Leaky Rectified Linear Unit activation and deactivation.
 ///
 #[derive(Copy, Clone, Debug)]
 pub struct LeakyReLU {
@@ -114,7 +114,7 @@ pub struct LeakyReLU {
 }
 
 impl LeakyReLU {
-    /// new returns new instance of LeakyReLU
+    /// Returns new instance of LeakyReLU.
     ///
     pub fn new(alpha: f64) -> LeakyReLU {
         LeakyReLU { alpha: alpha }
