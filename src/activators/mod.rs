@@ -20,7 +20,7 @@ pub enum ActivatorOption {
     Sigmoid,
     Tanh,
     ReLU,
-    LeakyReLu,
+    LeakyReLU,
 }
 
 impl ActivatorOption {
@@ -31,8 +31,7 @@ impl ActivatorOption {
             ActivatorOption::Sigmoid => Some(Box::new(Sigmoid::new())),
             ActivatorOption::Tanh => Some(Box::new(Tanh::new())),
             ActivatorOption::ReLU => Some(Box::new(ReLU::new())),
-            ActivatorOption::Sigmoid => Some(Box::new(LeakyReLU::new(alpha))),
-            _ => None,
+            ActivatorOption::LeakyReLU => Some(Box::new(LeakyReLU::new(alpha))),
         }
     }
 }

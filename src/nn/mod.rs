@@ -1,5 +1,6 @@
 use crate::activators::{ActivatorDeactivator, ActivatorOption, LeakyReLU, ReLU, Sigmoid, Tanh};
 use crate::matrix::{Matrix, MatrixError};
+use std::cell::RefCell;
 
 /// NN crate errors.
 ///
@@ -11,7 +12,7 @@ pub enum NNError {
 /// Describes the Layer schema.
 ///
 #[derive(Clone, Debug)]
-struct LayerSchema {
+pub struct LayerSchema {
     size: usize,
     activator: ActivatorOption,
     alpha: f64,
@@ -22,9 +23,9 @@ struct LayerSchema {
 ///
 #[derive(Debug)]
 struct Layer {
-    activations: Matrix,
-    bias: Option<Matrix>,
-    weights: Option<Matrix>,
+    activations: RefCell<Matrix>,
+    bias: Option<RefCell<Matrix>>,
+    weights: Option<RefCell<Matrix>>,
     activator: Option<Box<dyn ActivatorDeactivator>>,
 }
 
@@ -45,14 +46,18 @@ impl NN {
         let mut layers: Vec<Layer> = Vec::new();
         for i in 0..schema.len() - 1 {
             layers.push(Layer {
-                activations: Matrix::new(1, schema[i].size),
-                bias: Some(Matrix::new(1, schema[i + 1].size)),
-                weights: Some(Matrix::new(schema[i].size, schema[i + 1].size)),
-                activator: schema[i].activator.get_activator(schema[i].alpha),
+                activations: Matrix::new(1, schema[i].size).into(),
+                bias: Some(Matrix::new(1, schema[i + 1].size).into()),
+                weights: Some(Matrix::new(schema[i].size, schema[i + 1].size).into()),
+                activator: if i != 0 {
+                    schema[i].activator.get_activator(schema[i].alpha)
+                } else {
+                    None
+                },
             });
         }
         layers.push(Layer {
-            activations: Matrix::new(1, schema[0].size),
+            activations: Matrix::new(1, schema[schema.len() - 1].size).into(),
             bias: None,
             weights: None,
             activator: None,
@@ -65,12 +70,12 @@ impl NN {
     ///
     pub fn randomize(&mut self) {
         self.layers.iter_mut().for_each(|l| {
-            l.activations.randomize();
+            l.activations.borrow_mut().randomize();
             if let Some(ref mut bias) = l.bias {
-                bias.randomize();
+                bias.borrow_mut().randomize();
             }
             if let Some(ref mut bias) = l.bias {
-                bias.randomize();
+                bias.borrow_mut().randomize();
             }
         });
     }
@@ -78,13 +83,23 @@ impl NN {
     /// Copies values from input matrix in to the first self layer.
     ///
     pub fn input(&mut self, input: &Matrix) -> Result<(), MatrixError> {
-        self.layers[0].activations.copy_to_self(input)
+        self.layers[0].activations.borrow_mut().copy_to_self(input)
     }
 
     /// Copies values from the self output layer to the output matrix.
     ///
     pub fn output(&self, output: &mut Matrix) -> Result<(), MatrixError> {
-        output.copy_to_self(&self.layers[self.layers.len() - 1].activations)
+        output.copy_to_self(&self.layers[self.layers.len() - 1].activations.borrow())
+    }
+
+    pub fn forward(&mut self) -> Result<(), MatrixError> {
+        for i in 0..self.layers.len() - 1 {
+
+            //if let Some(actDeact) = self.layers[i + 1].activator {
+            //    self.layers[i + 1].activations.activate(&actDeact);
+            //}
+        }
+        Ok(())
     }
 }
 
@@ -141,8 +156,9 @@ mod tests {
         let nn = NN::new(&schema);
         let mut nnn = nn.unwrap();
         nnn.randomize();
+        let activations = nnn.layers[nnn.layers.len() - 1].activations.borrow();
 
-        if let Ok(value) = nnn.layers[2].activations.get_at(0, 0) {
+        if let Ok(value) = activations.get_at(0, 0) {
             assert_ne!(value, 0.0);
         }
     }
@@ -177,12 +193,12 @@ mod tests {
             panic!("error: {:?}", err);
         }
 
+        let activations = nnn.layers[1].activations.borrow();
+
         assert_eq!(
             true,
-            nnn.layers[0]
-                .activations
-                .compare(&input, |(x, y): (&f64, &f64)| x == y)
-        )
+            activations.compare(&input, |(x, y): (&f64, &f64)| x == y)
+        );
     }
 
     #[test]
@@ -214,11 +230,11 @@ mod tests {
             panic!("error: {:?}", err);
         }
 
+        let activations = nnn.layers[nnn.layers.len() - 1].activations.borrow();
+
         assert_eq!(
             true,
-            nnn.layers[nnn.layers.len() - 1]
-                .activations
-                .compare(&output, |(x, y): (&f64, &f64)| x == y)
-        )
+            activations.compare(&output, |(x, y): (&f64, &f64)| x == y)
+        );
     }
 }
