@@ -1,4 +1,4 @@
-use crate::activators::{ActivatorDeactivator, ActivatorOption, LeakyReLU, ReLU, Sigmoid, Tanh};
+use crate::activators::{ActivatorDeactivator, ActivatorOption};
 use crate::matrix::{Matrix, MatrixError};
 use std::cell::RefCell;
 
@@ -93,7 +93,7 @@ impl NN {
     }
 
     pub fn forward(&mut self) -> Result<(), MatrixError> {
-        for i in 0..self.layers.len() - 1 {
+        for _i in 0..self.layers.len() - 1 {
 
             //if let Some(actDeact) = self.layers[i + 1].activator {
             //    self.layers[i + 1].activations.activate(&actDeact);
