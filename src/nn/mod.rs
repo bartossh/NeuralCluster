@@ -255,4 +255,57 @@ mod tests {
             activations.compare(&output, |(x, y): (&f64, &f64)| x == y)
         );
     }
+
+    #[test]
+    fn test_forward_nn() {
+        let schema: Vec<LayerSchema> = vec![
+            LayerSchema {
+                size: 10,
+                activator: ActivatorOption::Sigmoid,
+                alpha: 0.0,
+            },
+            LayerSchema {
+                size: 10,
+                activator: ActivatorOption::Tanh,
+                alpha: 0.0,
+            },
+            LayerSchema {
+                size: 10,
+                activator: ActivatorOption::ReLU,
+                alpha: 0.0,
+            },
+        ];
+        let nn = NN::new(&schema);
+        let mut nnn = nn.unwrap();
+        nnn.randomize();
+
+        let mut input = Matrix::new(1, 10);
+        input.randomize();
+
+        if let Err(err) = nnn.input(&input) {
+            panic!("error: {:?}", err);
+        }
+
+        let mut output = Matrix::new(1, 10);
+
+        if let Err(err) = nnn.output(&mut output) {
+            panic!("error: {:?}", err);
+        }
+        {
+            let activations_0 = nnn.layers[&nnn.layers.len() - 1].activations.borrow();
+            assert_eq!(
+                true,
+                activations_0.compare(&output, |(x, y): (&f64, &f64)| x == y)
+            );
+        }
+        if let Err(err) = nnn.forward() {
+            panic!("error: {:?}", err);
+        }
+
+        let activations_1 = nnn.layers[&nnn.layers.len() - 1].activations.borrow();
+        assert_ne!(
+            true,
+            activations_1.compare(&output, |(x, y): (&f64, &f64)| x == y)
+        );
+    }
 }
