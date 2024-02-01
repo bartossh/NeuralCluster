@@ -8,17 +8,17 @@ fn nn_cost_benchmark(c: &mut Criterion) {
     c.bench_function("nn_cost_benchmark", |b| {
         let schema: Vec<LayerSchema> = vec![
             LayerSchema {
-                size: 10,
+                size: 100,
                 activator: ActivatorOption::Sigmoid,
                 alpha: 0.0,
             },
             LayerSchema {
-                size: 10,
+                size: 100,
                 activator: ActivatorOption::Tanh,
                 alpha: 0.0,
             },
             LayerSchema {
-                size: 10,
+                size: 100,
                 activator: ActivatorOption::ReLU,
                 alpha: 0.0,
             },
@@ -27,10 +27,10 @@ fn nn_cost_benchmark(c: &mut Criterion) {
         let mut nnn = nn.unwrap();
         nnn.randomize();
 
-        let mut input = Matrix::new(10, 10);
+        let mut input = Matrix::new(1000, 100);
         input.randomize();
 
-        let mut output = Matrix::new(10, 10);
+        let mut output = Matrix::new(1000, 100);
         output.randomize();
 
         b.iter(|| {
@@ -39,5 +39,45 @@ fn nn_cost_benchmark(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, nn_cost_benchmark);
+fn nn_backprop_benchmark(c: &mut Criterion) {
+    c.bench_function("nn_cost_benchmark", |b| {
+        let schema: Vec<LayerSchema> = vec![
+            LayerSchema {
+                size: 100,
+                activator: ActivatorOption::Sigmoid,
+                alpha: 0.0,
+            },
+            LayerSchema {
+                size: 100,
+                activator: ActivatorOption::Tanh,
+                alpha: 0.0,
+            },
+            LayerSchema {
+                size: 100,
+                activator: ActivatorOption::ReLU,
+                alpha: 0.0,
+            },
+        ];
+        let nn = NN::new(&schema);
+        let mut nnn = nn.unwrap();
+        nnn.randomize();
+
+        let mut input = Matrix::new(1000, 100);
+        input.randomize();
+
+        let mut output = Matrix::new(1000, 100);
+        output.randomize();
+        let mut mem = nnn.create_mem();
+
+        b.iter(|| {
+            if let Err(err) = nnn.backprop(&mut mem, &input, &output) {
+                panic!("error: {:?}", err);
+            }
+        })
+    });
+}
+
+
+
+criterion_group!(benches, nn_cost_benchmark, nn_backprop_benchmark);
 criterion_main!(benches);

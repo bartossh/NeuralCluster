@@ -178,12 +178,84 @@ impl NN {
         self.layers.iter().for_each(|l: &Layer| l.activations.borrow_mut().zero());
     }
 
+    /// Creates memory NN that is used by backpropagation process.
+    ///
+    pub fn create_mem(&self) -> NN {
+        let mut mem: NN = NN{layers: Vec::new()};
+        self.layers.iter().for_each(|l: &Layer| {
+
+            let activations = &l.activations.borrow();
+            let mut newLayer = Layer {
+                activations: Matrix::new(activations.get_rows_num(), activations.get_cols_num()).into(),
+                weights: None,
+                bias: None,
+                activator: None,
+            };
+            if let Some(w) = &l.weights {
+                let w = w.borrow();
+                newLayer.weights = Some(Matrix::new(w.get_rows_num(), w.get_cols_num()).into());
+            }
+            
+            if let Some(b) = &l.bias {
+                let b = b.borrow();
+                newLayer.bias = Some(Matrix::new(b.get_rows_num(), b.get_cols_num()).into());
+            }
+            mem.layers.push(newLayer);
+        });
+
+        return mem;
+    }
+
+    /// Checks if two neural networks have the same layout.
+    ///
+    pub fn has_same_layout(&self, other: &NN) -> bool {
+        if self.layers.len() != other.layers.len() {
+            return false;
+        }
+
+        let mut result: bool = true;
+        
+        self.layers.iter().zip(other.layers.iter()).
+            for_each(|(lx, ly): (&Layer, &Layer)| {
+                let asx = &lx.activations.borrow();
+                let asy = &ly.activations.borrow();
+                if asx.get_cols_num() != asy.get_cols_num() {
+                    result = false;
+                }
+                if asx.get_rows_num() != asy.get_rows_num() {
+                    result = false;
+                }
+
+                if let (Some(wsx), Some(wsy)) = (&lx.weights, &ly.weights) {
+                    let wsx = wsx.borrow();
+                    let wsy = wsy.borrow();
+                    if wsx.get_cols_num() != wsy.get_cols_num() {
+                        result = false;
+                    }
+                    if wsx.get_rows_num() != wsy.get_rows_num() {
+                        result = false;
+                    }
+                }
+                
+                if let (Some(bsx), Some(bsy)) = (&lx.bias, &ly.bias) {
+                    let bsx = bsx.borrow();
+                    let bsy = bsy.borrow();
+                    if bsx.get_cols_num() != bsy.get_cols_num() {
+                        result = false;
+                    }
+                    if bsx.get_rows_num() != bsy.get_rows_num() {
+                        result = false;
+                    }
+                }
+            });
+
+        return result;
+    }
+
     /// Calculates the memory matrix that contains back propagated cost in memory NN.
     /// Return NNError if input and output matrix are not matching in row size.
     ///
     pub fn backprop(&mut self, mem: &mut NN, input: &Matrix, output: &Matrix) -> Result<(), NNError> {
-        // TODO: check mem matches self
-
         if !input.has_same_rows_num(output) {
             return Err(NNError::UnmatchingRowsNum);
         }
@@ -266,29 +338,45 @@ impl NN {
 
         for l in 0..mem.layers.len()-1 {
             if let Some(weights) = &mem.layers[l].weights {
-                for r in 0..weights.borrow().get_rows_num() {
-                    for c in 0.. weights.borrow().get_cols_num() {
+                let mut rows = 0;
+                let mut cols = 0;
+                {
+                    let weights = weights.borrow();
+                    rows = weights.get_rows_num();
+                    cols = weights.get_cols_num();
+                }
+                for r in 0..rows {
+                    for c in 0.. cols {
+                        let mut wv_update = 0.0;
                         if let Ok(wv) = weights.borrow().get_at(r, c) {
-                            weights.borrow_mut().set_at(r, c, wv/(rows as f64));
+                            wv_update = wv/(rows as f64);
                         } else {
                             return Err(NNError::Fatal);
                         }
+                        weights.borrow_mut().set_at(r, c, wv_update);
                     }
                 }
             }
             if let Some(bias) = &mem.layers[l].bias {
-                for c in 0..bias.borrow().get_cols_num() {
+                let mut cols = 0; 
+                {
+                    cols = bias.borrow().get_cols_num()
+                }
+                for c in 0..cols {
+                    let mut bv_update = 0.0;
                     if let Ok(bv) = bias.borrow().get_at(0, c) {
-                        bias.borrow_mut().set_at(0, c, bv/(rows as f64));
+                        bv_update = bv/(rows as f64); 
                     } else {
                         return Err(NNError::Fatal);
                     }
+                    bias.borrow_mut().set_at(0, c, bv_update);
                 }
             }
         }
 
         Ok(())
     }
+
 }
 
 #[cfg(test)]
@@ -514,6 +602,42 @@ mod tests {
             assert_ne!(c, 0.0);
         } else {
             panic!("cost calculation failed");
+        }
+    }
+    
+    #[test]
+    fn test_dry_backprop_nn() {
+        let schema: Vec<LayerSchema> = vec![
+            LayerSchema {
+                size: 10,
+                activator: ActivatorOption::Sigmoid,
+                alpha: 0.0,
+            },
+            LayerSchema {
+                size: 10,
+                activator: ActivatorOption::Tanh,
+                alpha: 0.0,
+            },
+            LayerSchema {
+                size: 10,
+                activator: ActivatorOption::ReLU,
+                alpha: 0.0,
+            },
+        ];
+        let nn = NN::new(&schema);
+        let mut nnn = nn.unwrap();
+        nnn.randomize();
+
+        let mut input = Matrix::new(10, 10);
+        input.randomize();
+
+        let mut output = Matrix::new(10, 10);
+        output.randomize();
+
+        let mut mem = nnn.create_mem();
+
+        if let Err(err) = nnn. backprop(&mut mem, &input, &output) {
+            panic!("error: {:?}", err);
         }
     }
 }

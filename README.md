@@ -19,7 +19,6 @@ cargo test -- --nocapture --test-threads=1
 
 - Benchmarking:
 
-
 ```sh
 cargo bench 
 ```
