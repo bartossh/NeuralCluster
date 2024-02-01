@@ -160,6 +160,135 @@ impl NN {
 
         Ok(cost)
     }
+    
+    fn zero(&mut self) {
+        self.layers.iter_mut().for_each(|l| {
+            l.activations.borrow_mut().zero();
+            if let Some(ref mut bias) = l.bias {
+                bias.borrow_mut().zero();
+            }
+            if let Some(ref mut bias) = l.bias {
+                bias.borrow_mut().zero();
+            }
+        });
+
+    }
+
+    fn zero_activations_layers(&mut self) {
+        self.layers.iter().for_each(|l: &Layer| l.activations.borrow_mut().zero());
+    }
+
+    /// Calculates the memory matrix that contains back propagated cost in memory NN.
+    /// Return NNError if input and output matrix are not matching in row size.
+    ///
+    pub fn backprop(&mut self, mem: &mut NN, input: &Matrix, output: &Matrix) -> Result<(), NNError> {
+        // TODO: check mem matches self
+
+        if !input.has_same_rows_num(output) {
+            return Err(NNError::UnmatchingRowsNum);
+        }
+        mem.zero();
+
+        for r in 0..input.get_rows_num() {
+            let row = input.get_row(r);
+            if let Ok(row) = row {
+                if let Err(_) = self.input(&row) {
+                    return Err(NNError::Fatal);
+                }
+            } else {
+                return Err(NNError::Fatal);
+            }
+
+            if let Err(_) = self.forward() {
+                return Err(NNError::Fatal);
+            }
+
+            mem.zero_activations_layers();
+
+            for c in 0..output.get_cols_num() {
+                let so = self.layers[self.layers.len()-1].activations.borrow().get_at(0, c);
+                let oo = output.get_at(r, c);
+                if let (Ok(so), Ok(oo)) = (so, oo) {
+                    mem.layers[mem.layers.len()-1].activations.borrow_mut().set_at(0, c, so - oo); 
+                }
+            }
+
+            for l in self.layers.len()-1..0 {
+                for c in 0..self.layers[l].activations.borrow().get_cols_num() {
+                    let sv = self.layers[l].activations.borrow().get_at(0, c);
+                    let dv = mem.layers[l].activations.borrow().get_at(0, c);
+                    let db = match &mem.layers[l-1].bias {
+                        Some(b) => b.borrow().get_at(0, c),
+                        None => Err(MatrixError::Falal),
+                    };
+
+                    if let (Ok(mut sv), Ok(dv), Ok(mut db)) = (sv, dv, db) {
+                        if let Some(activator) = &self.layers[l].activator{
+                            activator.de_act_f(&mut sv);
+                            db += 2.0*dv*sv;
+                            let bi = &mem.layers[l-1].bias;
+                            if let Some(bi) = bi {
+                                bi.borrow_mut().set_at(0, c, db);
+                            }
+                        }
+
+                        for c_p in 0..self.layers[l-1].activations.borrow().get_cols_num() {
+                            let spv = self.layers[l-1].activations.borrow().get_at(0, c_p);
+                            let dpv = mem.layers[l-1].activations.borrow().get_at(0, c_p);
+                            let spw = match &self.layers[l-1].weights {
+                                Some(w) =>  w.borrow().get_at(c_p, c),
+                                None => Err(MatrixError::Falal),
+                            };
+                            let dpw = match &mem.layers[l-1].weights {
+                                Some(w) =>  w.borrow().get_at(c_p, c),
+                                None => Err(MatrixError::Falal),
+                            };
+
+                            if let (Ok(spv), Ok(dpv), Ok(spw), Ok(dpw)) = (spv, dpv, spw, dpw) {
+                                let wm = &mem.layers[l-1].weights;
+                                if let Some(wm) = wm {
+                                    wm.borrow_mut().set_at(c_p, c, dpw+2.0*dv*sv*spv);
+                                }
+                                mem.layers[l-1].activations.borrow_mut().set_at(0, c_p, dpv + 2.0*dv*sv*spw);
+                            } else {
+                                return Err(NNError::Fatal);
+                            }
+
+                        }
+
+                    } else {
+                        return Err(NNError::Fatal);
+                    }
+                }
+            }
+        }
+        let rows = output.get_rows_num();
+
+        for l in 0..mem.layers.len()-1 {
+            if let Some(weights) = &mem.layers[l].weights {
+                for r in 0..weights.borrow().get_rows_num() {
+                    for c in 0.. weights.borrow().get_cols_num() {
+                        if let Ok(wv) = weights.borrow().get_at(r, c) {
+                            weights.borrow_mut().set_at(r, c, wv/(rows as f64));
+                        } else {
+                            return Err(NNError::Fatal);
+                        }
+                    }
+                }
+            }
+            if let Some(bias) = &mem.layers[l].bias {
+                for c in 0..bias.borrow().get_cols_num() {
+                    if let Ok(bv) = bias.borrow().get_at(0, c) {
+                        bias.borrow_mut().set_at(0, c, bv/(rows as f64));
+                    } else {
+                        return Err(NNError::Fatal);
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
