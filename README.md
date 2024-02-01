@@ -8,3 +8,18 @@ I aim only to understand the NN better by playing with implementation of distrib
 
 Keep your expectations low.
 
+
+## Development
+
+- Testing:
+
+```sh
+cargo test -- --nocapture --test-threads=1
+```
+
+- Benchmarking:
+
+
+```sh
+cargo bench 
+```

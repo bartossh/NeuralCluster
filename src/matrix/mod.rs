@@ -65,6 +65,18 @@ impl Matrix {
         Ok(())
     }
 
+    /// Returns copy of a given row as new Matrix.
+    ///
+    pub fn get_row(&self, row: usize) -> Result<Matrix, MatrixError> {
+        if row > self.rows - 1 {
+            return Err(MatrixError::OutsideRange);
+        }
+        let mut m = Matrix::new(1, self.cols);
+        m.values = self.values[row * self.cols..row * self.cols + self.cols].to_vec();
+
+        Ok(m)
+    }
+
     /// Randomizes all values.
     ///
     pub fn randomize(&mut self) {
@@ -130,6 +142,12 @@ impl Matrix {
             }
         });
         (min, max)
+    }
+
+    /// Checks if both matrices has the same number of rows.
+    ///
+    pub fn has_same_rows_num(&self, other: &Matrix) -> bool {
+        self.rows == other.rows
     }
 
     /// Compares the size and all the self values with other matrix values.
@@ -319,6 +337,28 @@ mod tests {
                     Ok(v) => assert_eq!(v, 0.10),
                     Err(err) => panic!("{:?}", err),
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn test_get_row() {
+        let (rows, cols): (usize, usize) = (10, 20);
+        let mut m = Matrix::new(rows, cols);
+        for r in 0..m.get_rows_num() {
+            let mut row: Vec<f64> = Vec::new();
+            for c in 0..m.get_cols_num() {
+                let v = 0.10 * (r * c) as f64;
+                if let Err(err) = m.set_at(r, c, v) {
+                    panic!("{:?}", err);
+                }
+                row.push(v)
+            }
+            let nm = m.get_row(r);
+            if let Ok(nm) = nm {
+                row.iter()
+                    .zip(nm.values.iter())
+                    .for_each(|(x, y): (&f64, &f64)| assert_eq!(x, y));
             }
         }
     }

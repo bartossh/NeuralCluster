@@ -7,15 +7,17 @@ use std::cell::RefCell;
 #[derive(Clone, Debug, PartialEq)]
 pub enum NNError {
     WrongSchemaLength,
+    UnmatchingRowsNum,
+    Fatal,
 }
 
 /// Describes the Layer schema.
 ///
 #[derive(Clone, Debug)]
 pub struct LayerSchema {
-    size: usize,
-    activator: ActivatorOption,
-    alpha: f64,
+    pub size: usize,
+    pub activator: ActivatorOption,
+    pub alpha: f64,
 }
 
 /// Contains activations, weights and bias matrices with perceptron activator and deactivator
@@ -118,6 +120,45 @@ impl NN {
             }
         }
         Ok(())
+    }
+
+    /// Calculates total cost of the neural network.
+    ///
+    pub fn cost(&mut self, input: &Matrix, output: &Matrix) -> Result<f64, NNError> {
+        if !input.has_same_rows_num(output) {
+            return Err(NNError::UnmatchingRowsNum);
+        }
+        let mut cost: f64 = 0.0;
+        for r in 0..input.get_rows_num() {
+            let row = input.get_row(r);
+            if let Ok(row) = row {
+                if let Err(_) = self.input(&row) {
+                    return Err(NNError::Fatal);
+                }
+            } else {
+                return Err(NNError::Fatal);
+            }
+
+            if let Err(_) = self.forward() {
+                return Err(NNError::Fatal);
+            }
+
+            for c in 0..output.get_cols_num() {
+                let so = self.layers[self.layers.len() - 1]
+                    .activations
+                    .borrow()
+                    .get_at(0, c);
+                let oo = output.get_at(r, c);
+                if let (Ok(so), Ok(oo)) = (so, oo) {
+                    let d = so - oo;
+                    cost += d * d;
+                }
+            }
+        }
+
+        cost /= output.get_rows_num() as f64;
+
+        Ok(cost)
     }
 }
 
@@ -307,5 +348,43 @@ mod tests {
             true,
             activations_1.compare(&output, |(x, y): (&f64, &f64)| x == y)
         );
+    }
+
+    #[test]
+    fn test_cost_nn() {
+        let schema: Vec<LayerSchema> = vec![
+            LayerSchema {
+                size: 10,
+                activator: ActivatorOption::Sigmoid,
+                alpha: 0.0,
+            },
+            LayerSchema {
+                size: 10,
+                activator: ActivatorOption::Tanh,
+                alpha: 0.0,
+            },
+            LayerSchema {
+                size: 10,
+                activator: ActivatorOption::ReLU,
+                alpha: 0.0,
+            },
+        ];
+        let nn = NN::new(&schema);
+        let mut nnn = nn.unwrap();
+        nnn.randomize();
+
+        let mut input = Matrix::new(10, 10);
+        input.randomize();
+
+        let mut output = Matrix::new(10, 10);
+        output.randomize();
+
+        let cost = nnn.cost(&input, &output);
+
+        if let Ok(c) = cost {
+            assert_ne!(c, 0.0);
+        } else {
+            panic!("cost calculation failed");
+        }
     }
 }

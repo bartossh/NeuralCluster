@@ -1,7 +1,7 @@
-mod activators;
-mod float_math;
-mod matrix;
-mod nn;
+pub mod activators;
+pub mod float_math;
+pub mod matrix;
+pub mod nn;
 
 fn main() {
     println!("Hello, world!");
