@@ -60,7 +60,9 @@ impl NN {
             activations: Matrix::new(1, schema[schema.len() - 1].size).into(),
             bias: None,
             weights: None,
-            activator: None,
+            activator: schema[schema.len() - 1]
+                .activator
+                .get_activator(schema[schema.len() - 1].alpha),
         });
 
         Ok(NN { layers: layers })
@@ -92,12 +94,28 @@ impl NN {
         output.copy_to_self(&self.layers[self.layers.len() - 1].activations.borrow())
     }
 
+    /// Runs feed forward activations for NN.
+    ///
     pub fn forward(&mut self) -> Result<(), MatrixError> {
-        for _i in 0..self.layers.len() - 1 {
-
-            //if let Some(actDeact) = self.layers[i + 1].activator {
-            //    self.layers[i + 1].activations.activate(&actDeact);
-            //}
+        for i in 0..self.layers.len() - 1 {
+            let mut rec = self.layers[i + 1].activations.borrow_mut();
+            let act = self.layers[i].activations.borrow();
+            if let Some(weights) = &self.layers[i].weights {
+                let wgh = weights.borrow();
+                if let Err(err) = rec.dot(&act, &wgh) {
+                    return Err(err);
+                }
+            }
+            if let Some(bias) = &self.layers[i].bias {
+                let b = bias.borrow();
+                if let Err(err) = rec.sum(&b) {
+                    return Err(err);
+                }
+            }
+            if let Some(activator) = &self.layers[i].activator {
+                let act: &dyn ActivatorDeactivator = &**activator;
+                rec.activate(act);
+            }
         }
         Ok(())
     }
@@ -193,7 +211,7 @@ mod tests {
             panic!("error: {:?}", err);
         }
 
-        let activations = nnn.layers[1].activations.borrow();
+        let activations = nnn.layers[0].activations.borrow();
 
         assert_eq!(
             true,
