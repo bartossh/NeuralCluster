@@ -381,7 +381,7 @@ impl NN {
         Ok(())
     }
 
-    /// Performs learning procss by applying corrections with given learning rate 
+    /// Performs learning process by applying corrections with given learning rate 
     /// from mem neural network. Function assumes that mem has the same architecture
     /// and the same matrices sizes for all layers. Returns NNError if any of above isn't met.
     /// The mem and self architecture isn't validated beforehand for performance purposes.
