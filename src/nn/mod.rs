@@ -254,6 +254,10 @@ impl NN {
 
     /// Calculates the memory matrix that contains back propagated cost in memory NN.
     /// Return NNError if input and output matrix are not matching in row size.
+    /// Function assumes that mem has the same architecture
+    /// and the same matrices sizes for all layers. Returns NNError if any of above isn't met.
+    /// The mem and self architecture isn't validated beforehand for performance purposes.
+    /// This function may panic.
     ///
     pub fn backprop(&mut self, mem: &mut NN, input: &Matrix, output: &Matrix) -> Result<(), NNError> {
         if !input.has_same_rows_num(output) {
@@ -370,6 +374,68 @@ impl NN {
                         return Err(NNError::Fatal);
                     }
                     bias.borrow_mut().set_at(0, c, bv_update);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Performs learning procss by applying corrections with given learning rate 
+    /// from mem neural network. Function assumes that mem has the same architecture
+    /// and the same matrices sizes for all layers. Returns NNError if any of above isn't met.
+    /// The mem and self architecture isn't validated beforehand for performance purposes.
+    /// This function may panic.
+    ///
+    pub fn learn(&mut self, mem: &NN, rate: f64) -> Result<(), NNError> {
+        if self.layers.len() != self.layers.len() {
+            return Err(NNError::WrongSchemaLength);
+        }
+        for l in 0..self.layers.len()-1 {
+            if let (Some(s_weights), Some(m_weights)) = (&self.layers[l].weights, &mem.layers[l].weights) {
+                let mut rows = 0;
+                let mut cols = 0;
+                {
+                    rows = s_weights.borrow().get_rows_num();
+                    cols = s_weights.borrow().get_cols_num();
+                }
+                for r in 0..rows {
+                    for c in 0..cols {
+                        let mut swv: f64 = 0.0;
+                        if let Ok(sw) = s_weights.borrow().get_at(r, c) {
+                            swv = sw;
+                        } else {
+                            return Err(NNError::Fatal);
+                        }
+                        let mut mwv: f64 = 0.0;
+                        if let Ok(mw) = m_weights.borrow().get_at(r, c) {
+                            mwv = mw;
+                        } else {
+                            return Err(NNError::Fatal);
+                        }
+                        let _ = s_weights.borrow_mut().set_at(r, c, swv - mwv*rate);
+                    }
+                }
+            }
+            if let (Some(s_bias), Some(m_bias)) = (&self.layers[l].bias, &mem.layers[l].bias) {
+                let mut cols = 0;
+                {
+                    cols = s_bias.borrow().get_cols_num();
+                }
+                for c in 0..cols {
+                    let mut sbv: f64 = 0.0;
+                    if let Ok(sb) = s_bias.borrow().get_at(0, c) {
+                        sbv = sb;
+                    } else {
+                        return Err(NNError::Fatal);
+                    }
+                    let mut mbv: f64 = 0.0;
+                    if let Ok(mb) = m_bias.borrow().get_at(0, c) {
+                        mbv = mb;
+                    } else {
+                        return Err(NNError::Fatal);
+                    }
+                    let _ = s_bias.borrow_mut().set_at(0, c, sbv - mbv*rate);
                 }
             }
         }
@@ -636,7 +702,49 @@ mod tests {
 
         let mut mem = nnn.create_mem();
 
-        if let Err(err) = nnn. backprop(&mut mem, &input, &output) {
+        if let Err(err) = nnn.backprop(&mut mem, &input, &output) {
+            panic!("error: {:?}", err);
+        }
+    }
+    
+    #[test]
+    fn test_dry_learn_nn() {
+        let schema: Vec<LayerSchema> = vec![
+            LayerSchema {
+                size: 10,
+                activator: ActivatorOption::Sigmoid,
+                alpha: 0.0,
+            },
+            LayerSchema {
+                size: 10,
+                activator: ActivatorOption::Tanh,
+                alpha: 0.0,
+            },
+            LayerSchema {
+                size: 10,
+                activator: ActivatorOption::ReLU,
+                alpha: 0.0,
+            },
+        ];
+        let nn = NN::new(&schema);
+        let mut nnn = nn.unwrap();
+        nnn.randomize();
+
+        let mut input = Matrix::new(10, 10);
+        input.randomize();
+
+        let mut output = Matrix::new(10, 10);
+        output.randomize();
+
+        let mut mem = nnn.create_mem();
+
+        if let Err(err) = nnn.backprop(&mut mem, &input, &output) {
+            panic!("error: {:?}", err);
+        }
+
+        let learning_rate: f64 = 0.001;
+
+        if let Err(err) = nnn.learn(&mem, learning_rate) {
             panic!("error: {:?}", err);
         }
     }
