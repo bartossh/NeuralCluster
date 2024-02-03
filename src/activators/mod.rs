@@ -78,6 +78,7 @@ impl ActivatorDeactivator for Tanh {
     }
 
     fn de_act_f(&self, x: &mut f64) {
+        *x = (*x + 1.0) / 2.0; // normalization between -1 and 1 *x = (*x - min) / (max - min)
         *x = x.atanh();
     }
 }

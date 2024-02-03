@@ -9,7 +9,7 @@ pub enum MatrixError {
     OutsideRange,
     FilterToLarge,
     NotMatchingSize,
-    Falal,
+    Fatal,
 }
 
 /// Matrix with f64 values stored in rows, cols order.
@@ -200,7 +200,7 @@ impl Matrix {
                         if let (Ok(sv), Ok(fv)) = (svo, fvo) {
                             sum += sv * fv;
                         } else {
-                            return Err(MatrixError::Falal);
+                            return Err(MatrixError::Fatal);
                         }
                     }
                 }
@@ -242,7 +242,7 @@ impl Matrix {
                         svv += avv * bvv;
                         let _ = self.set_at(sr, sc, svv);
                     } else {
-                        return Err(MatrixError::Falal);
+                        return Err(MatrixError::Fatal);
                     }
                 }
             }
@@ -264,7 +264,7 @@ impl Matrix {
                     sv += ov;
                     let _ = self.set_at(r, c, sv);
                 } else {
-                    return Err(MatrixError::Falal);
+                    return Err(MatrixError::Fatal);
                 }
             }
         }
