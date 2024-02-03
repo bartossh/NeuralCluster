@@ -74,12 +74,13 @@ impl Tanh {
 
 impl ActivatorDeactivator for Tanh {
     fn act_f(&self, x: &mut f64) {
-        *x = x.tanh();
+        let ex = f64::exp(*x);
+        let enx = f64::exp(-*x);
+        *x = (ex - enx) / (ex + enx);
     }
 
     fn de_act_f(&self, x: &mut f64) {
-        *x = (*x + 1.0) / 2.0; // normalization between -1 and 1 *x = (*x - min) / (max - min)
-        *x = x.atanh();
+        *x = 1.0 - *x * *x;
     }
 }
 

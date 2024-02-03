@@ -386,7 +386,9 @@ impl NN {
                         } else {
                             return Err(NNError::Fatal);
                         }
-                        let _ = weights.borrow_mut().set_at(r, c, wv_update);
+                        if let Err(_) = weights.borrow_mut().set_at(r, c, wv_update) {
+                            return Err(NNError::Fatal);
+                        }
                     }
                 }
             }
@@ -399,7 +401,9 @@ impl NN {
                     } else {
                         return Err(NNError::Fatal);
                     }
-                    let _ = bias.borrow_mut().set_at(0, c, bv_update);
+                    if let Err(_) = bias.borrow_mut().set_at(0, c, bv_update) {
+                        return Err(NNError::Fatal);
+                    }
                 }
             }
         }
@@ -471,6 +475,7 @@ impl NN {
 mod tests {
     use super::*;
     use crate::activators::ActivatorOption;
+    use crate::float_math::round;
 
     #[test]
     fn test_create_new_nn() {
@@ -783,17 +788,17 @@ mod tests {
             },
             LayerSchema {
                 size: 4,
-                activator: ActivatorOption::Sigmoid,
+                activator: ActivatorOption::Tanh,
                 alpha: 0.0,
             },
             LayerSchema {
                 size: 2,
-                activator: ActivatorOption::Sigmoid,
+                activator: ActivatorOption::Tanh,
                 alpha: 0.0,
             },
             LayerSchema {
                 size: 1,
-                activator: ActivatorOption::Sigmoid,
+                activator: ActivatorOption::Tanh,
                 alpha: 0.0,
             },
         ];
@@ -819,10 +824,9 @@ mod tests {
         let _ = output.set_at(3, 0, 0.0);
 
         let mut mem = nnn.create_mem();
-        let epochs: usize = 20000;
+        let epochs: usize = 200000;
         let learning_rate: f64 = 0.1;
-        let mut total_cost = f64::MAX;
-        for _ in 0..epochs {
+        for e in 0..epochs {
             if let Err(err) = nnn.backprop(&mut mem, &input, &output) {
                 panic!("error: {:?}", err);
             }
@@ -830,14 +834,48 @@ mod tests {
             if let Err(err) = nnn.learn(&mem, learning_rate) {
                 panic!("error: {:?}", err);
             }
-            let cost = nnn.cost(&input, &output);
-            if let Ok(c) = cost {
-                //assert_ne!(true, c > total_cost);
-                total_cost = c;
-                println!("cost: {:.4}", c);
+            if e % 100 != 0 {
+                continue;
             } else {
-                panic!("cost calculation failed");
-            } 
+                let cost = nnn.cost(&input, &output);
+                if let Ok(c) = cost {
+                    println!("cost: {:.6}", c);
+                } else {
+                    panic!("cost calculation failed");
+                }
+            }
+
+            let mut found: usize = 0;
+            for i in 0..in_out_rows {
+                let in_row = &input.get_row(i);
+                let out_row = &output.get_row(i);
+                if let (Ok(in_row), Ok(out_row)) = (in_row, out_row) {
+                    if let Err(err) = nnn.input(in_row) {
+                        panic!("error: {:?}", err);
+                    }
+
+                    let mut output = Matrix::new(1,1);
+
+                    if let Err(err) = nnn.output(&mut output) {
+                        panic!("error: {:?}", err);
+                    }
+                    
+                    if let Err(err) = nnn.forward() {
+                        panic!("error: {:?}", err);
+                    }
+
+                    if let (Ok(test_value), Ok(calc_value)) = (&out_row.get_at(0, 0), &output.get_at(0,0)) {
+                        println!("{:.4} | {:.4}", test_value, calc_value);
+                        if round(*test_value, 2) == round(*calc_value, 2) {
+                            found+=1;
+                        }
+                    } 
+                }
+            }
+            if found == in_out_rows {
+                println!("FOUND SOLUTION");
+                break;
+            }
         }
     }
 }
