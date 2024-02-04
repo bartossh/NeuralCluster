@@ -79,7 +79,7 @@ impl Matrix {
     
     /// Removes given values from matrix value at row and column.
     ///
-    pub fn remove_at(&mut self, row: usize, col: usize, value: f64) -> Result<(), MatrixError> {
+    pub fn substract_at(&mut self, row: usize, col: usize, value: f64) -> Result<(), MatrixError> {
         if row >= self.rows || col >= self.cols {
             return Err(MatrixError::OutsideRange);
         }
@@ -402,7 +402,7 @@ mod tests {
     }
 
     #[test]
-    fn test_remove_at() {
+    fn test_substract_at() {
         let (rows, cols): (usize, usize) = (10, 20);
         let mut m = Matrix::new(rows, cols);
         for r in 0..m.get_rows_num() {
@@ -410,7 +410,7 @@ mod tests {
                 if let Err(err) = m.set_at(r, c, 0.10) {
                     panic!("{:?}", err);
                 }
-                if let Err(err) = m.remove_at(r, c, 0.05) {
+                if let Err(err) = m.substract_at(r, c, 0.05) {
                     panic!("{:?}", err);
                 }
                 let v = m.get_at(r, c);

@@ -278,7 +278,6 @@ impl NN {
     /// Function assumes that mem has the same architecture
     /// and the same matrices sizes for all layers. Returns NNError if any of above isn't met.
     /// The mem and self architecture isn't validated beforehand for performance purposes.
-    /// This function may panic.
     ///
     pub fn backprop(&mut self, mem: &mut NN, input: &Matrix, output: &Matrix) -> Result<(), NNError> {
         if !input.has_same_rows_num(output) {
@@ -403,7 +402,6 @@ impl NN {
     /// from mem neural network. Function assumes that mem has the same architecture
     /// and the same matrices sizes for all layers. Returns NNError if any of above isn't met.
     /// The mem and self architecture isn't validated beforehand for performance purposes.
-    /// This function may panic.
     ///
     pub fn learn(&mut self, mem: &NN, rate: f64) -> Result<(), NNError> {
         if self.layers.len() != self.layers.len() {
@@ -421,7 +419,7 @@ impl NN {
                         } else {
                             return Err(NNError::Fatal);
                         }
-                        if let Err(_) = s_weights.borrow_mut().remove_at(r, c, mw_v*rate){
+                        if let Err(_) = s_weights.borrow_mut().substract_at(r, c, mw_v*rate){
                             return Err(NNError::Fatal);
                         }
                     }
@@ -436,7 +434,7 @@ impl NN {
                     } else {
                         return Err(NNError::Fatal);
                     }
-                    if let Err(_) = s_bias.borrow_mut().remove_at(0, c, mb_v*rate){
+                    if let Err(_) = s_bias.borrow_mut().substract_at(0, c, mb_v*rate){
                         return Err(NNError::Fatal);
                     }
                 }
