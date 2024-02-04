@@ -1,6 +1,7 @@
 use crate::activators::ActivatorDeactivator;
 use rand::rngs::OsRng;
 use rand::RngCore;
+use rand::{Rng, SeedableRng};
 
 /// Matrix crate errors.
 ///
@@ -65,6 +66,28 @@ impl Matrix {
         Ok(())
     }
 
+    /// Adds given values to matrix value at row and column.
+    ///
+    pub fn add_at(&mut self, row: usize, col: usize, value: f64) -> Result<(), MatrixError> {
+        if row >= self.rows || col >= self.cols {
+            return Err(MatrixError::OutsideRange);
+        }
+        self.values[row * self.cols + col] += value;
+
+        Ok(())
+    }
+    
+    /// Removes given values from matrix value at row and column.
+    ///
+    pub fn remove_at(&mut self, row: usize, col: usize, value: f64) -> Result<(), MatrixError> {
+        if row >= self.rows || col >= self.cols {
+            return Err(MatrixError::OutsideRange);
+        }
+        self.values[row * self.cols + col] -= value;
+
+        Ok(())
+    }
+
     /// Returns copy of a given row as new Matrix.
     ///
     pub fn get_row(&self, row: usize) -> Result<Matrix, MatrixError> {
@@ -83,7 +106,7 @@ impl Matrix {
         let mut rng = OsRng;
         self.values
             .iter_mut()
-            .for_each(|v: &mut f64| *v = rng.next_u64() as f64 / u64::MAX as f64)
+            .for_each(|v: &mut f64| *v = rng.next_u64() as f64 / u64::MAX as f64 * 2.0 - 1.0);
     }
 
     /// Activates all values.
@@ -271,6 +294,22 @@ impl Matrix {
 
         Ok(())
     }
+
+    /// Shuffles the rows.
+    ///
+    pub fn shuffle_rows(&mut self) {
+        let mut rng = OsRng::default();
+        for row in 0..self.rows {
+            let rand_row = rng.gen_range(0..self.rows);
+            let mut j = 0;
+            for i in row*self.cols..(row*self.cols+self.cols) {
+                let acc = self.values[rand_row*self.cols+j];
+                self.values[rand_row*self.cols+j] = self.values[i];
+                self.values[i] =  acc;
+                j+=1;
+            }
+        }
+    } 
 }
 
 #[cfg(test)]
@@ -294,7 +333,7 @@ mod tests {
         m.randomize();
         m.values
             .iter()
-            .for_each(|v: &f64| assert_eq!(true, *v > 0.0 && *v < 1.0));
+            .for_each(|v: &f64| assert_eq!(true, *v > -1.0 && *v < 1.0));
     }
 
     #[test]
@@ -340,7 +379,49 @@ mod tests {
             }
         }
     }
+    
+    #[test]
+    fn test_add_at() {
+        let (rows, cols): (usize, usize) = (10, 20);
+        let mut m = Matrix::new(rows, cols);
+        for r in 0..m.get_rows_num() {
+            for c in 0..m.get_cols_num() {
+                if let Err(err) = m.set_at(r, c, 0.10) {
+                    panic!("{:?}", err);
+                }
+                if let Err(err) = m.add_at(r, c, 0.10) {
+                    panic!("{:?}", err);
+                }
+                let v = m.get_at(r, c);
+                match v {
+                    Ok(v) => assert_eq!(v, 0.20),
+                    Err(err) => panic!("{:?}", err),
+                }
+            }
+        }
+    }
 
+    #[test]
+    fn test_remove_at() {
+        let (rows, cols): (usize, usize) = (10, 20);
+        let mut m = Matrix::new(rows, cols);
+        for r in 0..m.get_rows_num() {
+            for c in 0..m.get_cols_num() {
+                if let Err(err) = m.set_at(r, c, 0.10) {
+                    panic!("{:?}", err);
+                }
+                if let Err(err) = m.remove_at(r, c, 0.05) {
+                    panic!("{:?}", err);
+                }
+                let v = m.get_at(r, c);
+                match v {
+                    Ok(v) => assert_eq!(v, 0.05),
+                    Err(err) => panic!("{:?}", err),
+                }
+            }
+        }
+    }
+    
     #[test]
     fn test_get_row() {
         let (rows, cols): (usize, usize) = (10, 20);
@@ -404,7 +485,7 @@ mod tests {
             .iter()
             .zip(cp_m.values.iter())
             .for_each(|(x, y): (&f64, &f64)| {
-                assert_eq!(*x, *y);
+                assert_eq!(true, *x == *y || *x == 0.0 );
             });
     }
 
@@ -414,12 +495,12 @@ mod tests {
         let mut m = Matrix::new(rows, cols);
         m.randomize();
         let cp_m = m.clone();
-        m.activate(&LeakyReLU::new(1.1));
+        m.activate(&LeakyReLU::new(0.0));
         m.values
             .iter()
             .zip(cp_m.values.iter())
             .for_each(|(x, y): (&f64, &f64)| {
-                assert_eq!(*x, *y);
+                assert_eq!(true, *x == *y || *x >= 0.0 );
             });
     }
 
@@ -464,7 +545,7 @@ mod tests {
             .iter()
             .zip(cp_m.values.iter())
             .for_each(|(x, y): (&f64, &f64)| {
-                assert_eq!(*x, *y);
+                assert_eq!(true, *x == *y || *x == 0.0 );
             });
     }
 
@@ -474,12 +555,12 @@ mod tests {
         let mut m = Matrix::new(rows, cols);
         m.randomize();
         let cp_m = m.clone();
-        m.de_activate(&LeakyReLU::new(1.1));
+        m.de_activate(&LeakyReLU::new(0.0));
         m.values
             .iter()
             .zip(cp_m.values.iter())
             .for_each(|(x, y): (&f64, &f64)| {
-                assert_eq!(*x, *y);
+                assert_eq!(true, *x == *y || *x >= 0.0 );
             });
     }
 
@@ -511,11 +592,11 @@ mod tests {
                 9.0, 10.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 1.0, 2.0, 3.0, 4.0,
                 100.0, 6.0, 7.0, 8.0, 9.0, 10.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0,
                 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0,
-                7.0, 8.0, 9.0, 10.0,
+                7.0, 8.0, 9.0, -10.0,
             ],
         };
         let (min, max) = m.min_max();
-        assert_eq!(min, 0.0);
+        assert_eq!(min, -10.0);
         assert_eq!(max, 100.0);
     }
 
@@ -826,5 +907,6 @@ mod tests {
             true,
             receiver.compare(&result, |(x, y): (&f64, &f64)| *x == *y)
         );
-    }
+   }
+
 }

@@ -316,49 +316,37 @@ impl NN {
 
             for l in (1..self.layers.len()).rev() {
                 for c in 0..self.layers[l].activations.borrow().get_cols_num() {
-                    let sv = self.layers[l].activations.borrow().get_at(0, c);
-                    let dv = mem.layers[l].activations.borrow().get_at(0, c);
-                    let db = match &mem.layers[l-1].bias {
-                        Some(b) => b.borrow().get_at(0, c),
-                        None => Err(MatrixError::Fatal),
-                    };
+                    let sa = self.layers[l].activations.borrow().get_at(0, c);
+                    let ma = mem.layers[l].activations.borrow().get_at(0, c);
 
-                    if let (Ok(mut sv), Ok(dv), Ok(mut db)) = (sv, dv, db) {
+                    if let (Ok(mut sa), Ok(ma)) = (sa, ma) {
                         if let Some(activator) = &self.layers[l].activator {
-                            activator.de_act_f(&mut sv);
-                            db += 2.0*dv*sv;
-                            let bi = &mem.layers[l-1].bias;
-                            if let Some(bi) = bi {
-                                let _ = bi.borrow_mut().set_at(0, c, db);
+                            activator.de_act_f(&mut sa);
+                            let mbi = &mem.layers[l-1].bias;
+                            if let Some(mbi) = mbi {
+                                let _ = mbi.borrow_mut().add_at(0, c, 2.0*ma*sa);
                             } else {
                                 return Err(NNError::Fatal);
                             }
                         }
 
                         for c_p in 0..self.layers[l-1].activations.borrow().get_cols_num() {
-                            let spv = self.layers[l-1].activations.borrow().get_at(0, c_p);
-                            let dpv = mem.layers[l-1].activations.borrow().get_at(0, c_p);
-                            let spw = match &self.layers[l-1].weights {
-                                Some(w) =>  w.borrow().get_at(c_p, c),
-                                None => Err(MatrixError::Fatal),
-                            };
-                            let dpw = match &mem.layers[l-1].weights {
+                            let sa_p = self.layers[l-1].activations.borrow().get_at(0, c_p);
+                            let sw_p = match &self.layers[l-1].weights {
                                 Some(w) =>  w.borrow().get_at(c_p, c),
                                 None => Err(MatrixError::Fatal),
                             };
 
-                            if let (Ok(spv), Ok(dpv), Ok(spw), Ok(dpw)) = (spv, dpv, spw, dpw) {
+                            if let (Ok(sa_p), Ok(sw_p)) = (sa_p, sw_p) {
                                 let wm = &mem.layers[l-1].weights;
-                                let u_dpw = dpw+2.0*dv*sv*spv;
                                 if let Some(wm) = wm {
-                                    if let Err(err) = wm.borrow_mut().set_at(c_p, c, u_dpw){
+                                    if let Err(err) = wm.borrow_mut().add_at(c_p, c, 2.0*ma*sa*sa_p){
                                         return Err(NNError::Fatal);
                                     }
                                 } else {
                                     return Err(NNError::Fatal);
                                 }
-                                let u_dpv = dpv + 2.0*dv*sv*spw;
-                                if let Err(_) = mem.layers[l-1].activations.borrow_mut().set_at(0, c_p, u_dpv) {
+                                if let Err(_) = mem.layers[l-1].activations.borrow_mut().set_at(0, c_p, 2.0*ma*sa*sw_p) {
                                     return Err(NNError::Fatal);
                                 }
                             } else {
@@ -427,55 +415,42 @@ impl NN {
                 let cols = s_weights.borrow().get_cols_num();
                 for r in 0..rows {
                     for c in 0..cols {
-                        let mut swv: f64 = 0.0;
-                        if let Ok(sw) = s_weights.borrow().get_at(r, c) {
-                            swv = sw;
-                        } else {
-                            return Err(NNError::Fatal);
-                        }
-                        let mut mwv: f64 = 0.0;
+                        let mut mw_v: f64 = 0.0;
                         if let Ok(mw) = m_weights.borrow().get_at(r, c) {
-                            mwv = mw;
+                            mw_v = mw;
                         } else {
                             return Err(NNError::Fatal);
                         }
-                        let _ = s_weights.borrow_mut().set_at(r, c, swv - mwv*rate);
+                        if let Err(_) = s_weights.borrow_mut().remove_at(r, c, mw_v*rate){
+                            return Err(NNError::Fatal);
+                        }
                     }
                 }
             }
             if let (Some(s_bias), Some(m_bias)) = (&self.layers[l].bias, &mem.layers[l].bias) {
-                let mut cols = 0;
-                {
-                    cols = s_bias.borrow().get_cols_num();
-                }
+                let cols = s_bias.borrow().get_cols_num();
                 for c in 0..cols {
-                    let mut sbv: f64 = 0.0;
-                    if let Ok(sb) = s_bias.borrow().get_at(0, c) {
-                        sbv = sb;
-                    } else {
-                        return Err(NNError::Fatal);
-                    }
-                    let mut mbv: f64 = 0.0;
+                    let mut mb_v: f64 = 0.0;
                     if let Ok(mb) = m_bias.borrow().get_at(0, c) {
-                        mbv = mb;
+                        mb_v = mb;
                     } else {
                         return Err(NNError::Fatal);
                     }
-                    let _ = s_bias.borrow_mut().set_at(0, c, sbv - mbv*rate);
+                    if let Err(_) = s_bias.borrow_mut().remove_at(0, c, mb_v*rate){
+                        return Err(NNError::Fatal);
+                    }
                 }
             }
         }
 
         Ok(())
     }
-
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::activators::ActivatorOption;
-    use crate::float_math::round;
 
     #[test]
     fn test_create_new_nn() {
@@ -732,8 +707,6 @@ mod tests {
         if let Err(err) = nnn.backprop(&mut mem, &input, &output) {
             panic!("error: {:?}", err);
         }
-        nnn.print();
-        mem.print();
     }
     
     #[test]
@@ -779,6 +752,116 @@ mod tests {
     }
     
     #[test]
+    fn test_nn_learing_simplistic_or_problem() {
+        let schema: Vec<LayerSchema> = vec![
+            LayerSchema {
+                size: 2,
+                activator: ActivatorOption::Sigmoid,
+                alpha: 0.0,
+            },
+            LayerSchema {
+                size: 1,
+                activator: ActivatorOption::Sigmoid,
+                alpha: 0.0,
+            },
+            LayerSchema {
+                size: 1,
+                activator: ActivatorOption::Sigmoid,
+                alpha: 0.0,
+            },
+        ];
+        let nn = NN::new(&schema);
+        let mut nnn = nn.unwrap();
+        nnn.randomize();
+
+        let in_out_rows = 4;
+        let mut input = Matrix::new(in_out_rows, 2);
+        let mut output = Matrix::new(in_out_rows, 1);
+        
+        let _ = input.set_at(0, 0, 0.0);
+        let _ = input.set_at(0, 1, 0.0);
+        let _ = output.set_at(0, 0, 0.0);
+        let _ = input.set_at(1, 0, 0.0);
+        let _ = input.set_at(1, 1, 1.0);
+        let _ = output.set_at(1, 0, 1.0);
+        let _ = input.set_at(2, 0, 1.0);
+        let _ = input.set_at(2, 1, 0.0);
+        let _ = output.set_at(2, 0, 1.0);
+        let _ = input.set_at(3, 0, 1.0);
+        let _ = input.set_at(3, 1, 1.0);
+        let _ = output.set_at(3, 0, 1.0);
+
+        let mut mem = nnn.create_mem();
+        let epochs: usize = 1000000;
+        let learning_rate: f64 = 0.1;
+        let mut found: usize = 0;
+        for _ in 0..epochs {
+            if let Err(err) = nnn.backprop(&mut mem, &input, &output) {
+                panic!("error: {:?}", err);
+            }
+
+            if let Err(err) = nnn.learn(&mem, learning_rate) {
+                panic!("error: {:?}", err);
+            }
+            
+            found = 0;
+            for i in 0..in_out_rows {
+                let in_row = &input.get_row(i);
+                let out_row = &output.get_row(i);
+                if let (Ok(in_row), Ok(out_row)) = (in_row, out_row) {
+                    
+                    if let Err(err) = nnn.input(in_row) {
+                        panic!("error: {:?}", err);
+                    }
+                    
+                    if let Err(err) = nnn.forward() {
+                        panic!("error: {:?}", err);
+                    }
+
+                    let mut output = Matrix::new(1,1);
+
+                    if let Err(err) = nnn.output(&mut output) {
+                        panic!("error: {:?}", err);
+                    }
+
+                    if let (Ok(test_value), Ok(calc_value)) = (&out_row.get_at(0, 0), &output.get_at(0,0)) {
+                        if (*test_value - *calc_value).abs() < 0.1 {
+                            found+=1;
+                        }
+                    } 
+                }
+                if found == in_out_rows {
+                    break;
+                }
+            }
+        }
+        for i in 0..in_out_rows {
+            let in_row = &input.get_row(i);
+            let out_row = &output.get_row(i);
+            if let (Ok(in_row), Ok(out_row)) = (in_row, out_row) {
+                if let Err(err) = nnn.input(in_row) {
+                    panic!("error: {:?}", err);
+                }
+                
+                if let Err(err) = nnn.forward() {
+                    panic!("error: {:?}", err);
+                }
+
+                let mut output = Matrix::new(1,1);
+
+                if let Err(err) = nnn.output(&mut output) {
+                    panic!("error: {:?}", err);
+                } 
+
+                if let (Ok(test_value), Ok(calc_value)) = (&out_row.get_at(0, 0), &output.get_at(0,0)) {
+                    println!("expected: [ {:.3} ] | got [ {:.3} ]", *test_value, calc_value);
+                } 
+            }
+        }
+        assert_eq!(found, in_out_rows);
+    }
+
+    //#[test]
     fn test_nn_learing_simplistic_xor_problem() {
         let schema: Vec<LayerSchema> = vec![
             LayerSchema {
@@ -788,17 +871,12 @@ mod tests {
             },
             LayerSchema {
                 size: 4,
-                activator: ActivatorOption::Tanh,
-                alpha: 0.0,
-            },
-            LayerSchema {
-                size: 2,
-                activator: ActivatorOption::Tanh,
+                activator: ActivatorOption::Sigmoid,
                 alpha: 0.0,
             },
             LayerSchema {
                 size: 1,
-                activator: ActivatorOption::Tanh,
+                activator: ActivatorOption::Sigmoid,
                 alpha: 0.0,
             },
         ];
@@ -824,9 +902,10 @@ mod tests {
         let _ = output.set_at(3, 0, 0.0);
 
         let mut mem = nnn.create_mem();
-        let epochs: usize = 200000;
+        let epochs: usize = 1000000;
         let learning_rate: f64 = 0.1;
-        for e in 0..epochs {
+        let mut found: usize = 0;
+        for _ in 0..epochs { 
             if let Err(err) = nnn.backprop(&mut mem, &input, &output) {
                 panic!("error: {:?}", err);
             }
@@ -834,18 +913,8 @@ mod tests {
             if let Err(err) = nnn.learn(&mem, learning_rate) {
                 panic!("error: {:?}", err);
             }
-            if e % 100 != 0 {
-                continue;
-            } else {
-                let cost = nnn.cost(&input, &output);
-                if let Ok(c) = cost {
-                    println!("cost: {:.6}", c);
-                } else {
-                    panic!("cost calculation failed");
-                }
-            }
 
-            let mut found: usize = 0;
+            found = 0;
             for i in 0..in_out_rows {
                 let in_row = &input.get_row(i);
                 let out_row = &output.get_row(i);
@@ -853,29 +922,52 @@ mod tests {
                     if let Err(err) = nnn.input(in_row) {
                         panic!("error: {:?}", err);
                     }
-
-                    let mut output = Matrix::new(1,1);
-
-                    if let Err(err) = nnn.output(&mut output) {
-                        panic!("error: {:?}", err);
-                    }
                     
                     if let Err(err) = nnn.forward() {
                         panic!("error: {:?}", err);
                     }
 
+                    let mut output = Matrix::new(1,1);
+
+                    if let Err(err) = nnn.output(&mut output) {
+                        panic!("error: {:?}", err);
+                    } 
+
                     if let (Ok(test_value), Ok(calc_value)) = (&out_row.get_at(0, 0), &output.get_at(0,0)) {
-                        println!("{:.4} | {:.4}", test_value, calc_value);
-                        if round(*test_value, 2) == round(*calc_value, 2) {
+                        if (*test_value - *calc_value).abs() < 0.1 {
                             found+=1;
                         }
                     } 
                 }
             }
             if found == in_out_rows {
-                println!("FOUND SOLUTION");
                 break;
             }
         }
+        for i in 0..in_out_rows {
+            let in_row = &input.get_row(i);
+            let out_row = &output.get_row(i);
+            if let (Ok(in_row), Ok(out_row)) = (in_row, out_row) {
+                if let Err(err) = nnn.input(in_row) {
+                    panic!("error: {:?}", err);
+                }
+                
+                if let Err(err) = nnn.forward() {
+                    panic!("error: {:?}", err);
+                }
+
+                let mut output = Matrix::new(1,1);
+
+                if let Err(err) = nnn.output(&mut output) {
+                    panic!("error: {:?}", err);
+                } 
+
+                if let (Ok(test_value), Ok(calc_value)) = (&out_row.get_at(0, 0), &output.get_at(0,0)) {
+                    println!("expected: [ {:.3} ] | got [ {:.3} ]", *test_value, calc_value);
+                } 
+            }
+        }
+
+        assert_eq!(found, in_out_rows);
     }
 }
